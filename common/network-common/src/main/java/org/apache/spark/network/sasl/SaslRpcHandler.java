@@ -17,22 +17,21 @@
 
 package org.apache.spark.network.sasl;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import javax.security.sasl.Sasl;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.server.AbstractAuthRpcHandler;
 import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.TransportConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.security.sasl.Sasl;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * RPC Handler which performs SASL authentication before delegating to a child RPC handler.
@@ -77,6 +76,7 @@ public class SaslRpcHandler extends AbstractAuthRpcHandler {
       ByteBuf nettyBuf = Unpooled.wrappedBuffer(message);
       SaslMessage saslMessage;
       try {
+        // 对客户端发送的消息进行 SASL 解密
         saslMessage = SaslMessage.decode(nettyBuf);
       } finally {
         nettyBuf.release();
@@ -91,6 +91,7 @@ public class SaslRpcHandler extends AbstractAuthRpcHandler {
 
       byte[] response;
       try {
+        // 使用 SparkSaslServer 处理已解密的消息
         response = saslServer.response(JavaUtils.bufferToArray(
           saslMessage.body().nioByteBuffer()));
       } catch (IOException ioe) {
@@ -112,6 +113,7 @@ public class SaslRpcHandler extends AbstractAuthRpcHandler {
       }
 
       logger.debug("Enabling encryption for channel {}", client);
+      // 对管道进行 SASL 加密
       SaslEncryption.addToChannel(channel, saslServer, conf.maxSaslEncryptedBlockSize());
       complete(false);
       return true;

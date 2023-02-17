@@ -32,11 +32,13 @@ import org.apache.spark.util.io.{ChunkedByteBuffer, ChunkedByteBufferOutputStrea
 /**
  * Component which configures serialization, compression and encryption for various Spark
  * components, including automatic selection of which [[Serializer]] to use for shuffles.
+ *
+ * 序列化管理器，给各种 Spark 组件提供序列化、压缩，以及加密服务
  */
 private[spark] class SerializerManager(
-    defaultSerializer: Serializer,
+    defaultSerializer: Serializer, // 默认的序列化器，默认为 JavaSerializer。
     conf: SparkConf,
-    encryptionKey: Option[Array[Byte]]) {
+    encryptionKey: Option[Array[Byte]]) { // 加密使用的密钥
 
   def this(defaultSerializer: Serializer, conf: SparkConf) = this(defaultSerializer, conf, None)
 
@@ -63,24 +65,36 @@ private[spark] class SerializerManager(
     primitiveClassTags ++ arrayClassTags
   }
 
+  // 是否对广播变量进行压缩
   // Whether to compress broadcast variables that are stored
   private[this] val compressBroadcast = conf.get(config.BROADCAST_COMPRESS)
+
+  // 是否对 Shuffle 输出数据进行压缩
   // Whether to compress shuffle output that are stored
   private[this] val compressShuffle = conf.get(config.SHUFFLE_COMPRESS)
+
+  // 是否对 RDD 进行压缩
   // Whether to compress RDD partitions that are stored serialized
   private[this] val compressRdds = conf.get(config.RDD_COMPRESS)
+
+  // 是否对溢出到磁盘上的 Shuffle 数据进行压缩
   // Whether to compress shuffle output temporarily spilled to disk
   private[this] val compressShuffleSpill = conf.get(config.SHUFFLE_SPILL_COMPRESS)
 
-  /* The compression codec to use. Note that the "lazy" val is necessary because we want to delay
+  /*
+   * 使用的压缩编解码器
+   * The compression codec to use. Note that the "lazy" val is necessary because we want to delay
    * the initialization of the compression codec until it is first used. The reason is that a Spark
    * program could be using a user-defined codec in a third party jar, which is loaded in
    * Executor.updateDependencies. When the BlockManager is initialized, user level jars hasn't been
-   * loaded yet. */
+   * loaded yet.
+   */
   private lazy val compressionCodec: CompressionCodec = CompressionCodec.createCodec(conf)
 
+  // 是否支持加密
   def encryptionEnabled: Boolean = encryptionKey.isDefined
 
+  // 当前类型是否能够使用 kryo
   def canUseKryo(ct: ClassTag[_]): Boolean = {
     primitiveAndPrimitiveArrayClassTags.contains(ct) || ct == stringClassTag
   }
@@ -122,6 +136,8 @@ private[spark] class SerializerManager(
 
   /**
    * Wrap an input stream for encryption and compression
+   *
+   * 对 Block 的输入流进行加密和压缩
    */
   def wrapStream(blockId: BlockId, s: InputStream): InputStream = {
     wrapForCompression(blockId, wrapForEncryption(s))
@@ -129,6 +145,8 @@ private[spark] class SerializerManager(
 
   /**
    * Wrap an output stream for encryption and compression
+   *
+   * 对 Block 的输出流进行加密和压缩
    */
   def wrapStream(blockId: BlockId, s: OutputStream): OutputStream = {
     wrapForCompression(blockId, wrapForEncryption(s))
@@ -167,7 +185,7 @@ private[spark] class SerializerManager(
   }
 
   /** Serializes into a stream. */
-  def dataSerializeStream[T: ClassTag](
+  def dataSerializeStream[T: ClassTag]( // 对 Block 的输出流序列化
       blockId: BlockId,
       outputStream: OutputStream,
       values: Iterator[T]): Unit = {
@@ -178,14 +196,14 @@ private[spark] class SerializerManager(
   }
 
   /** Serializes into a chunked byte buffer. */
-  def dataSerialize[T: ClassTag](
+  def dataSerialize[T: ClassTag]( // 序列化成分块字节缓冲区 ChunkedByteBuffer
       blockId: BlockId,
       values: Iterator[T]): ChunkedByteBuffer = {
     dataSerializeWithExplicitClassTag(blockId, values, implicitly[ClassTag[T]])
   }
 
   /** Serializes into a chunked byte buffer. */
-  def dataSerializeWithExplicitClassTag(
+  def dataSerializeWithExplicitClassTag( // 序列化成分块字节缓冲区 ChunkedByteBuffer，附加类型标记
       blockId: BlockId,
       values: Iterator[_],
       classTag: ClassTag[_]): ChunkedByteBuffer = {
@@ -201,7 +219,7 @@ private[spark] class SerializerManager(
    * Deserializes an InputStream into an iterator of values and disposes of it when the end of
    * the iterator is reached.
    */
-  def dataDeserializeStream[T](
+  def dataDeserializeStream[T]( // 将 InputStream 反序列化成 Iterator
       blockId: BlockId,
       inputStream: InputStream)
       (classTag: ClassTag[T]): Iterator[T] = {

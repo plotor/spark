@@ -17,8 +17,6 @@
 
 package org.apache.spark.network.protocol;
 
-import java.util.List;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -26,12 +24,18 @@ import io.netty.handler.codec.MessageToMessageEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * Encoder used by the server side to encode server-to-client responses.
  * This encoder is stateless so it is safe to be shared by multiple threads.
  */
 @ChannelHandler.Sharable
 public final class MessageEncoder extends MessageToMessageEncoder<Message> {
+
+  /*
+   * 消息编码器，在将消息放入管道前先对消息内容进行编码，防止管道另一端读取时丢包和解析错误。
+   */
 
   private static final Logger logger = LoggerFactory.getLogger(MessageEncoder.class);
 

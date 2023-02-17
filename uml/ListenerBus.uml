@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.spark.util.ListenerBus</OriginalElement>
+  <nodes>
+    <node x="-110.0" y="149.0">org.apache.spark.scheduler.ReplayListenerBus</node>
+    <node x="130.0" y="149.0">org.apache.spark.scheduler.AsyncEventQueue</node>
+    <node x="13.75" y="82.66666666666667">org.apache.spark.scheduler.SparkListenerBus</node>
+    <node x="9.75" y="-17.0">org.apache.spark.util.ListenerBus</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.spark.scheduler.ReplayListenerBus" target="org.apache.spark.scheduler.SparkListenerBus" relationship="REALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="0.0" y="133.0" />
+      <point x="119.75" y="133.0" />
+      <point x="0.0" y="16.50033333333333" />
+    </edge>
+    <edge source="org.apache.spark.scheduler.AsyncEventQueue" target="org.apache.spark.scheduler.SparkListenerBus" relationship="REALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="239.5" y="133.0" />
+      <point x="119.75" y="133.0" />
+      <point x="0.0" y="16.50033333333333" />
+    </edge>
+    <edge source="org.apache.spark.scheduler.SparkListenerBus" target="org.apache.spark.util.ListenerBus" relationship="INTERFACE_GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="0.0" y="16.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic" zoom="1.5" showDependencies="false" x="129.5" y="92.5" />
+  <SelectedNodes />
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

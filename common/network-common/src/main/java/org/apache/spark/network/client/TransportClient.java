@@ -17,15 +17,6 @@
 
 package org.apache.spark.network.client;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import javax.annotation.Nullable;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -35,12 +26,28 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import org.apache.spark.network.buffer.ManagedBuffer;
+import org.apache.spark.network.buffer.NioManagedBuffer;
+import org.apache.spark.network.protocol.ChunkFetchRequest;
+import org.apache.spark.network.protocol.MergedBlockMetaRequest;
+import org.apache.spark.network.protocol.MergedBlockMetaSuccess;
+import org.apache.spark.network.protocol.OneWayMessage;
+import org.apache.spark.network.protocol.RpcFailure;
+import org.apache.spark.network.protocol.RpcRequest;
+import org.apache.spark.network.protocol.StreamChunkId;
+import org.apache.spark.network.protocol.StreamRequest;
+import org.apache.spark.network.protocol.UploadStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.buffer.ManagedBuffer;
-import org.apache.spark.network.buffer.NioManagedBuffer;
-import org.apache.spark.network.protocol.*;
+import javax.annotation.Nullable;
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
@@ -71,6 +78,11 @@ import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
  * Concurrency: thread safe and can be called from multiple threads.
  */
 public class TransportClient implements Closeable {
+
+  /*
+   * RPC 客户端，旨在允许有效传输大量数据，这些数据将被拆分成几百 KB 到几 MB 的块。
+   */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportClient.class);
 
   private final Channel channel;
@@ -130,7 +142,7 @@ public class TransportClient implements Closeable {
    * @param chunkIndex 0-based index of the chunk to fetch
    * @param callback Callback invoked upon successful receipt of chunk, or upon any failure.
    */
-  public void fetchChunk(
+  public void fetchChunk( // 从远端流中请求单个块
       long streamId,
       int chunkIndex,
       ChunkReceivedCallback callback) {
@@ -157,7 +169,7 @@ public class TransportClient implements Closeable {
    * @param streamId The stream to fetch.
    * @param callback Object to call with the stream data.
    */
-  public void stream(String streamId, StreamCallback callback) {
+  public void stream(String streamId, StreamCallback callback) { // 基于指定的 streamId 从远端获取流数据
     StdChannelListener listener = new StdChannelListener(streamId) {
       @Override
       void handleFailure(String errorMsg, Throwable cause) throws Exception {
@@ -185,7 +197,7 @@ public class TransportClient implements Closeable {
    * @param callback Callback to handle the RPC's reply.
    * @return The RPC's id.
    */
-  public long sendRpc(ByteBuffer message, RpcResponseCallback callback) {
+  public long sendRpc(ByteBuffer message, RpcResponseCallback callback) { // 异步发送 RPC 请求，并通过 callback 接收响应
     if (logger.isTraceEnabled()) {
       logger.trace("Sending RPC to {}", getRemoteAddress(channel));
     }
@@ -194,6 +206,7 @@ public class TransportClient implements Closeable {
     handler.addRpcRequest(requestId, callback);
 
     RpcChannelListener listener = new RpcChannelListener(requestId, callback);
+    // 发送 RPC 请求
     channel.writeAndFlush(new RpcRequest(requestId, new NioManagedBuffer(message)))
       .addListener(listener);
 
@@ -261,7 +274,7 @@ public class TransportClient implements Closeable {
    * Synchronously sends an opaque message to the RpcHandler on the server-side, waiting for up to
    * a specified timeout for a response.
    */
-  public ByteBuffer sendRpcSync(ByteBuffer message, long timeoutMs) {
+  public ByteBuffer sendRpcSync(ByteBuffer message, long timeoutMs) { // 异步发送 RPC 请求并超时阻塞等待响应
     final SettableFuture<ByteBuffer> result = SettableFuture.create();
 
     sendRpc(message, new RpcResponseCallback() {
@@ -300,7 +313,7 @@ public class TransportClient implements Closeable {
    *
    * @param message The message to send.
    */
-  public void send(ByteBuffer message) {
+  public void send(ByteBuffer message) { // 异步发送 RPC 请求，忽略响应
     channel.writeAndFlush(new OneWayMessage(new NioManagedBuffer(message)));
   }
 
@@ -388,6 +401,7 @@ public class TransportClient implements Closeable {
 
     @Override
     void handleFailure(String errorMsg, Throwable cause) {
+      // 从 outstandingRpcs 缓存中移除当前 requestId
       handler.removeRpcRequest(rpcRequestId);
       callback.onFailure(new IOException(errorMsg, cause));
     }

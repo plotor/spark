@@ -26,23 +26,35 @@ import org.apache.spark.util.RpcUtils
 
 /**
  * A reference for a remote [[RpcEndpoint]]. [[RpcEndpointRef]] is thread-safe.
+ *
+ * 持有 RpcEndpointRef 可以向关联的远端 RpcEndpoint 发送请求
  */
 private[spark] abstract class RpcEndpointRef(conf: SparkConf)
   extends Serializable with Logging {
 
+  // 最大重试次数，默认为 3
   private[this] val maxRetries = RpcUtils.numRetries(conf)
+  // 重新连接需要等待的毫秒数
   private[this] val retryWaitMs = RpcUtils.retryWaitMs(conf)
+  // 请求超时时间，默认为 120s
   private[this] val defaultAskTimeout = RpcUtils.askRpcTimeout(conf)
 
   /**
    * return the address for the [[RpcEndpointRef]]
+   *
+   * 返回关联的 RpcEndpoint 的地址
    */
   def address: RpcAddress
 
+  /**
+   * 返回关联的 RpcEndpoint 名称
+   */
   def name: String
 
   /**
    * Sends a one-way asynchronous message. Fire-and-forget semantics.
+   *
+   * 发送单向异步消息
    */
   def send(message: Any): Unit
 

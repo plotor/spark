@@ -17,22 +17,36 @@
 
 package org.apache.spark.network.server;
 
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-
 import com.google.common.base.Throwables;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-
+import org.apache.spark.network.buffer.ManagedBuffer;
+import org.apache.spark.network.buffer.NioManagedBuffer;
+import org.apache.spark.network.client.MergedBlockMetaResponseCallback;
+import org.apache.spark.network.client.RpcResponseCallback;
+import org.apache.spark.network.client.StreamCallbackWithID;
+import org.apache.spark.network.client.StreamInterceptor;
+import org.apache.spark.network.client.TransportClient;
+import org.apache.spark.network.protocol.ChunkFetchRequest;
+import org.apache.spark.network.protocol.Encodable;
+import org.apache.spark.network.protocol.MergedBlockMetaRequest;
+import org.apache.spark.network.protocol.MergedBlockMetaSuccess;
+import org.apache.spark.network.protocol.OneWayMessage;
+import org.apache.spark.network.protocol.RequestMessage;
+import org.apache.spark.network.protocol.RpcFailure;
+import org.apache.spark.network.protocol.RpcRequest;
+import org.apache.spark.network.protocol.RpcResponse;
+import org.apache.spark.network.protocol.StreamFailure;
+import org.apache.spark.network.protocol.StreamRequest;
+import org.apache.spark.network.protocol.StreamResponse;
+import org.apache.spark.network.protocol.UploadStream;
+import org.apache.spark.network.util.TransportFrameDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.buffer.ManagedBuffer;
-import org.apache.spark.network.buffer.NioManagedBuffer;
-import org.apache.spark.network.client.*;
-import org.apache.spark.network.protocol.*;
-import org.apache.spark.network.util.TransportFrameDecoder;
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
@@ -44,6 +58,10 @@ import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
  * The messages should have been processed by the pipeline setup by {@link TransportServer}.
  */
 public class TransportRequestHandler extends MessageHandler<RequestMessage> {
+
+  /*
+   * 用于处理客户端的请求。
+   */
 
   private static final Logger logger = LoggerFactory.getLogger(TransportRequestHandler.class);
 
@@ -104,12 +122,16 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
   @Override
   public void handle(RequestMessage request) throws Exception {
     if (request instanceof ChunkFetchRequest) {
+      // 处理获取块的请求
       chunkFetchRequestHandler.processFetchRequest(channel, (ChunkFetchRequest) request);
     } else if (request instanceof RpcRequest) {
+      // 处理 RPC 请求
       processRpcRequest((RpcRequest) request);
     } else if (request instanceof OneWayMessage) {
+      // 处理无需回复的 RPC 请求
       processOneWayMessage((OneWayMessage) request);
     } else if (request instanceof StreamRequest) {
+      // 处理流请求
       processStreamRequest((StreamRequest) request);
     } else if (request instanceof UploadStream) {
       processStreamUpload((UploadStream) request);
@@ -307,7 +329,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
    * Responds to a single message with some Encodable object. If a failure occurs while sending,
    * it will be logged and the channel closed.
    */
-  private ChannelFuture respond(Encodable result) {
+  private ChannelFuture respond(Encodable result) { // 响应客户端
     SocketAddress remoteAddress = channel.remoteAddress();
     return channel.writeAndFlush(result).addListener(future -> {
       if (future.isSuccess()) {

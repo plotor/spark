@@ -28,6 +28,10 @@ import org.apache.spark.SparkConf
 import org.apache.spark.api.python.PythonBroadcast
 import org.apache.spark.internal.Logging
 
+/**
+ * 将配置信息和序列化后的 RDD、Job 及 ShuffleDependency 等信息在本地存储，
+ * 如果为了容灾，也会复制到其它节点上
+ */
 private[spark] class BroadcastManager(
     val isDriver: Boolean, conf: SparkConf) extends Logging {
 
@@ -51,6 +55,7 @@ private[spark] class BroadcastManager(
     broadcastFactory.stop()
   }
 
+  // 下一个 Broadcast 的广播 ID
   private val nextBroadcastId = new AtomicLong(0)
 
   private[broadcast] val cachedValues =

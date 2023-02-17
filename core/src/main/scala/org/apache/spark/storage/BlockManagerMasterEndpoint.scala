@@ -42,6 +42,10 @@ import org.apache.spark.util.{RpcUtils, ThreadUtils, Utils}
 /**
  * BlockManagerMasterEndpoint is an [[IsolatedRpcEndpoint]] on the master node to track statuses
  * of all the storage endpoints' block managers.
+ *
+ * 主要对各个节点上的 BlockManager、BlockManager 与 Executor 的映射关系及 Block 位置信息（即 Block 所在的 BlockManager）等进行管理。
+ * BlockManagerMasterEndpoint 由 Driver 上的 SparkEnv 负责创建和注册到 Driver 的 RpcEnv 中，Driver 或 Executor 上的
+ * BlockManagerMaster#driverEndpoint 属性将持有 BlockManagerMasterEndpoint 的 RpcEndpointRef 引用
  */
 private[spark]
 class BlockManagerMasterEndpoint(
@@ -765,7 +769,10 @@ class BlockManagerMasterEndpoint(
 }
 
 @DeveloperApi
-case class BlockStatus(storageLevel: StorageLevel, memSize: Long, diskSize: Long) {
+case class BlockStatus(storageLevel: StorageLevel, // 存储级别
+                       memSize: Long, // Block 占用的内存大小
+                       diskSize: Long) { // Block 占用的磁盘大小
+  // 是否被存储到内存或磁盘中
   def isCached: Boolean = memSize + diskSize > 0
 }
 

@@ -30,9 +30,9 @@ import org.apache.spark.storage.memory.MemoryStore
  * @param lock a [[MemoryManager]] instance to synchronize on
  * @param memoryMode the type of memory tracked by this pool (on- or off-heap)
  */
-private[memory] class StorageMemoryPool(
+private[memory] class StorageMemoryPool( // 存储体系用到的内存池
     lock: Object,
-    memoryMode: MemoryMode
+    memoryMode: MemoryMode // 内存模式
   ) extends MemoryPool(lock) with Logging {
 
   private[this] val poolName: String = memoryMode match {
@@ -41,12 +41,13 @@ private[memory] class StorageMemoryPool(
   }
 
   @GuardedBy("lock")
-  private[this] var _memoryUsed: Long = 0L
+  private[this] var _memoryUsed: Long = 0L // 已使用的内存大小（单位：字节）
 
   override def memoryUsed: Long = lock.synchronized {
     _memoryUsed
   }
 
+  // 与当前 Pool 关联的 MemoryStore
   private var _memoryStore: MemoryStore = _
   def memoryStore: MemoryStore = {
     if (_memoryStore == null) {

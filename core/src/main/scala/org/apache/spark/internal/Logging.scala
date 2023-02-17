@@ -33,6 +33,8 @@ import org.apache.spark.util.Utils
  */
 trait Logging {
 
+  /* 日志接口，包装 Slf4j */
+
   // Make the log field transient so that objects with Logging can
   // be serialized and used on another machine
   @transient private var log_ : Logger = null

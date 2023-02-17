@@ -39,7 +39,7 @@ import org.apache.spark.internal.Logging
  * @param lock a [[MemoryManager]] instance to synchronize on
  * @param memoryMode the type of memory tracked by this pool (on- or off-heap)
  */
-private[memory] class ExecutionMemoryPool(
+private[memory] class ExecutionMemoryPool( // 计算体系用到的内存池
     lock: Object,
     memoryMode: MemoryMode
   ) extends MemoryPool(lock) with Logging {

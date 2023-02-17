@@ -48,25 +48,41 @@ private[spark] class SparkUI private (
   with Logging
   with UIRoot {
 
-  val killEnabled = sc.map(_.conf.get(UI_KILL_ENABLED)).getOrElse(false)
+  // 是否提供 Kill Stage 或 Job 的链接
+  val killEnabled: Boolean = sc.exists(_.conf.get(UI_KILL_ENABLED))
 
+  // 当前应用 ID
   var appId: String = _
 
   private var streamingJobProgressListener: Option[SparkListener] = None
 
   /** Initialize all components of the server. */
   def initialize(): Unit = {
+    // 添加 Jobs Tab
     val jobsTab = new JobsTab(this, store)
     attachTab(jobsTab)
+
+    // 添加 Stages Tab
     val stagesTab = new StagesTab(this, store)
     attachTab(stagesTab)
+
+    // 添加 Storage Tab
     attachTab(new StorageTab(this, store))
+
+    // 添加 Environment Tab
     attachTab(new EnvironmentTab(this, store))
+
+    // 添加 Executors Tab
     attachTab(new ExecutorsTab(this))
+
     addStaticHandler(SparkUI.STATIC_RESOURCE_DIR)
+
+    // 添加重定向 Handler，将对于 / 路径的访问重定向到 /job
     attachHandler(createRedirectHandler("/", "/jobs/", basePath = basePath))
+
     attachHandler(ApiRootResource.getServletHandler(this))
-    if (sc.map(_.conf.get(UI_PROMETHEUS_ENABLED)).getOrElse(false)) {
+
+    if (sc.exists(_.conf.get(UI_PROMETHEUS_ENABLED))) {
       attachHandler(PrometheusResource.getServletHandler(this))
     }
 
@@ -74,10 +90,10 @@ private[spark] class SparkUI private (
     attachHandler(createRedirectHandler(
       "/jobs/job/kill", "/jobs/", jobsTab.handleKillRequest, httpMethods = Set("GET", "POST")))
     attachHandler(createRedirectHandler(
-      "/stages/stage/kill", "/stages/", stagesTab.handleKillRequest,
-      httpMethods = Set("GET", "POST")))
+      "/stages/stage/kill", "/stages/", stagesTab.handleKillRequest, httpMethods = Set("GET", "POST")))
   }
 
+  // 构造期间执行初始化逻辑
   initialize()
 
   def getSparkUser: String = {

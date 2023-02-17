@@ -33,7 +33,7 @@ import org.apache.spark.util.Utils
  */
 @DeveloperApi
 abstract class Dependency[T] extends Serializable {
-  def rdd: RDD[T]
+  def rdd: RDD[T] // 当前依赖对应的 RDD
 }
 
 
@@ -49,7 +49,7 @@ abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
    * @param partitionId a partition of the child RDD
    * @return the partitions of the parent RDD that the child partition depends upon
    */
-  def getParents(partitionId: Int): Seq[Int]
+  def getParents(partitionId: Int): Seq[Int] // 获取指定分区父分区 ID 集合
 
   override def rdd: RDD[T] = _rdd
 }
@@ -185,7 +185,7 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
  */
 @DeveloperApi
 class OneToOneDependency[T](rdd: RDD[T]) extends NarrowDependency[T](rdd) {
-  override def getParents(partitionId: Int): List[Int] = List(partitionId)
+  override def getParents(partitionId: Int): List[Int] = List(partitionId) // 当前 RDD 与前置 RDD 的分区相同
 }
 
 
@@ -201,7 +201,7 @@ class OneToOneDependency[T](rdd: RDD[T]) extends NarrowDependency[T](rdd) {
 class RangeDependency[T](rdd: RDD[T], inStart: Int, outStart: Int, length: Int)
   extends NarrowDependency[T](rdd) {
 
-  override def getParents(partitionId: Int): List[Int] = {
+  override def getParents(partitionId: Int): List[Int] = { // 当前 RDD 的 partitionId 分区与前置 RDD 的 (partitionId - outStart + inStart) 分区对应
     if (partitionId >= outStart && partitionId < outStart + length) {
       List(partitionId - outStart + inStart)
     } else {

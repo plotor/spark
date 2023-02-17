@@ -18,7 +18,14 @@
 package org.apache.spark.metrics.sink
 
 private[spark] trait Sink {
+
+  // 启动
   def start(): Unit
+
+  // 停止
   def stop(): Unit
+
+  // 数据上报
   def report(): Unit
+
 }

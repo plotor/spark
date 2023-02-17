@@ -40,20 +40,26 @@ import org.apache.spark.util.io.ChunkedByteBuffer
 
 /**
  * Stores BlockManager blocks on disk.
+ *
+ * 磁盘存储，依赖于 DiskBlockManager，负责将 Block 存储到磁盘
  */
 private[spark] class DiskStore(
     conf: SparkConf,
     diskManager: DiskBlockManager,
     securityManager: SecurityManager) extends Logging {
 
+  // 读取磁盘中的Block时，是直接读取还是使用FileChannel的内存镜像映射方法读取的阈值。
   private val minMemoryMapBytes = conf.get(config.STORAGE_MEMORY_MAP_THRESHOLD)
   private val maxMemoryMapBytes = conf.get(config.MEMORY_MAP_LIMIT_FOR_TESTS)
   private val blockSizes = new ConcurrentHashMap[BlockId, Long]()
 
+  // 获取给定BlockId所对应Block的大小
   def getSize(blockId: BlockId): Long = blockSizes.get(blockId)
 
   /**
    * Invokes the provided callback function to write the specific block.
+   *
+   * 将BlockId所对应的Block写入磁盘
    *
    * @throws IllegalStateException if the block already exists in the disk store.
    */
@@ -89,6 +95,7 @@ private[spark] class DiskStore(
       s" on disk in ${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNs)} ms")
   }
 
+  // 将BlockId所对应的Block写入磁盘，Block的内容已经封装为ChunkedByteBuffer
   def putBytes(blockId: BlockId, bytes: ChunkedByteBuffer): Unit = {
     put(blockId) { channel =>
       bytes.writeFully(channel)

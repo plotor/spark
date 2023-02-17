@@ -92,13 +92,16 @@ private[netty] case class RpcOutboxMessage(
 
 }
 
-private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
+private[netty] class Outbox(nettyEnv: NettyRpcEnv, // 当前 Outbox 所在节点上的 NettyRpcEnv
+                            val address: RpcAddress) { // 关联的远端地址
 
   outbox => // Give this an alias so we can use it more clearly in closures.
 
+  // 消息列表
   @GuardedBy("this")
   private val messages = new java.util.LinkedList[OutboxMessage]
 
+  // 消息发送客户端
   @GuardedBy("this")
   private var client: TransportClient = null
 
@@ -114,6 +117,8 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
 
   /**
    * If there is any thread draining the message queue
+   *
+   * 表示当前 Outbox 内是否有线程正在处理 messages 列表中的消息
    */
   @GuardedBy("this")
   private var draining = false

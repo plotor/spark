@@ -37,7 +37,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
 
   private[this] val listenersPlusTimers = new CopyOnWriteArrayList[(L, Option[Timer])]
 
-  // Marked `private[spark]` for access in tests.
+  // Marked `private[spark]` for access in tests. 维护所有在册的监听器
   private[spark] def listeners = listenersPlusTimers.asScala.map(_._1).asJava
 
   private lazy val env = SparkEnv.get
@@ -63,7 +63,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
   /**
    * Add a listener to listen events. This method is thread-safe and can be called in any thread.
    */
-  final def addListener(listener: L): Unit = {
+  final def addListener(listener: L): Unit = { // 注册监听器
     listenersPlusTimers.add((listener, getTimer(listener)))
   }
 
@@ -71,7 +71,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
    * Remove a listener and it won't receive any events. This method is thread-safe and can be called
    * in any thread.
    */
-  final def removeListener(listener: L): Unit = {
+  final def removeListener(listener: L): Unit = { // 注销监听器
     listenersPlusTimers.asScala.find(_._1 eq listener).foreach { listenerAndTimer =>
       listenersPlusTimers.remove(listenerAndTimer)
     }
@@ -98,7 +98,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
    * Post the event to all registered listeners. The `postToAll` caller should guarantee calling
    * `postToAll` in the same thread for all events.
    */
-  def postToAll(event: E): Unit = {
+  def postToAll(event: E): Unit = { // 向所有的监听器发布事件
     // JavaConverters can create a JIterableWrapper if we use asScala.
     // However, this method will be called frequently. To avoid the wrapper cost, here we use
     // Java Iterator directly.
@@ -147,7 +147,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
   /** Allows bus implementations to prevent error logging for certain exceptions. */
   protected def isIgnorableException(e: Throwable): Boolean = false
 
-  private[spark] def findListenersByClass[T <: L : ClassTag](): Seq[T] = {
+  private[spark] def findListenersByClass[T <: L : ClassTag](): Seq[T] = { // 获取所有指定类型的监听器序列
     val c = implicitly[ClassTag[T]].runtimeClass
     listeners.asScala.filter(_.getClass == c).map(_.asInstanceOf[T]).toSeq
   }

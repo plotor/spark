@@ -17,8 +17,6 @@
 
 package org.apache.spark.network.util;
 
-import java.util.LinkedList;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.netty.buffer.ByteBuf;
@@ -26,6 +24,8 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+
+import java.util.LinkedList;
 
 /**
  * A customized frame decoder that allows intercepting raw data.
@@ -44,6 +44,10 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
  * to their handle() method.
  */
 public class TransportFrameDecoder extends ChannelInboundHandlerAdapter {
+
+  /*
+   * 对从管道中读取的 ByteBuf 按照数据帧进行解析。
+   */
 
   public static final String HANDLER_NAME = "frameDecoder";
   private static final int LENGTH_SIZE = 8;

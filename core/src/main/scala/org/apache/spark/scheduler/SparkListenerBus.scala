@@ -25,9 +25,12 @@ import org.apache.spark.util.ListenerBus
 private[spark] trait SparkListenerBus
   extends ListenerBus[SparkListenerInterface, SparkListenerEvent] {
 
+  /* 监听和投递 SparkListenerEvent 类型事件 */
+
   protected override def doPostEvent(
       listener: SparkListenerInterface,
       event: SparkListenerEvent): Unit = {
+    // 匹配事件类型，调用对应的方法处理事件
     event match {
       case stageSubmitted: SparkListenerStageSubmitted =>
         listener.onStageSubmitted(stageSubmitted)

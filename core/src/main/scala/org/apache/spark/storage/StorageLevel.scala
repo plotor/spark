@@ -37,11 +37,11 @@ import org.apache.spark.util.Utils
  */
 @DeveloperApi
 class StorageLevel private(
-    private var _useDisk: Boolean,
-    private var _useMemory: Boolean,
-    private var _useOffHeap: Boolean,
-    private var _deserialized: Boolean,
-    private var _replication: Int = 1)
+    private var _useDisk: Boolean, // 是否写入磁盘
+    private var _useMemory: Boolean, // 是否写入堆内存
+    private var _useOffHeap: Boolean, // 是否写入堆外内存
+    private var _deserialized: Boolean, // 是否需要对 Block 反序列化
+    private var _replication: Int = 1) // Block 副本数
   extends Externalizable {
 
   // TODO: Also add fields for caching priority, dataset ID, and flushing.

@@ -67,11 +67,15 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
       while (true) {
         try {
           val inbox = active.take()
+          // 毒药类型消息，则当前 MessageLoop 线程将退出
           if (inbox == MessageLoop.PoisonPill) {
             // Put PoisonPill back so that other threads can see it.
+            // 将 PoisonPill 重新放入到消息队列中，这是因为有可能不止一个 MessageLoop 线程，
+            // 为了让大家都“毒发身亡”，达到所有 MessageLoop 线程都结束的效果
             setActive(MessageLoop.PoisonPill)
             return
           }
+          // 对消息进行处理
           inbox.process(dispatcher)
         } catch {
           case NonFatal(e) => logError(e.getMessage, e)

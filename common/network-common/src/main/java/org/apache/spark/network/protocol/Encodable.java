@@ -30,6 +30,11 @@ import io.netty.buffer.ByteBuf;
  * Additionally, when adding a new Encodable Message, add it to {@link Message.Type}.
  */
 public interface Encodable {
+
+  /*
+   * 实现 Encodable 接口的类可以被打包到 ByteBuf 中，多个 Encodable 对象可以被打包进同一个 ByteBuf 中
+   */
+
   /** Number of bytes of the encoded form of this object. */
   int encodedLength();
 

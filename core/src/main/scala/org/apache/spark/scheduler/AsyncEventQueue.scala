@@ -57,6 +57,7 @@ private class AsyncEventQueue(
     queueSize
   }
 
+  // 存储事件的队列长度，默认为 10000
   private val eventQueue = new LinkedBlockingQueue[SparkListenerEvent](capacity)
 
   // Keep the event count separately, so that waitUntilEmpty() can be implemented properly;
@@ -65,19 +66,21 @@ private class AsyncEventQueue(
   private val eventCount = new AtomicLong()
 
   /** A counter for dropped events. */
-  private val droppedEventsCounter = new AtomicLong(0L)
+  private val droppedEventsCounter = new AtomicLong(0L) // 对删除的事件进行计数
 
   /** A counter to keep number of dropped events last time it was logged */
   @volatile private var lastDroppedEventsCounter: Long = 0L
 
   /** When `droppedEventsCounter` was logged last time in milliseconds. */
-  private val lastReportTimestamp = new AtomicLong(0L)
+  private val lastReportTimestamp = new AtomicLong(0L) // 记录最后一次日志打印的时间戳
 
+  // 标记是否由于 eventQueue 已满导致新的事件被删除
   private val logDroppedEvent = new AtomicBoolean(false)
 
   private var sc: SparkContext = null
-
+  // 标记启动状态
   private val started = new AtomicBoolean(false)
+  // 标记停止状态
   private val stopped = new AtomicBoolean(false)
 
   private val droppedEvents = metrics.metricRegistry.counter(s"queue.$name.numDroppedEvents")

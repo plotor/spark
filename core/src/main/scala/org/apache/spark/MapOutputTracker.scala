@@ -470,10 +470,16 @@ private[spark] class MapOutputTrackerMasterEndpoint(
  * and executor-side classes don't need to share a common base class; the current shared base class
  * is maintained primarily for backwards-compatibility in order to avoid having to update existing
  * test code.
-*/
+ *
+ * 跟踪 map 任务的输出状态，便于 reduce 任务定位 map 输出结果所在的节点地址，进而获取中间输出结果。
+ *
+ * 每个 map 任务或者 reduce 任务都会有其唯一标识，分别为 mapId 和 reduceId。每个 reduce 任务的输
+ * 入可能是多个 map 任务的输出，reduce 会到各个 map 任务所在的节点上拉取 Block，这一过程叫做 Shuffle。
+ * 每次 Shuffle 都有唯一的标识 shuffleId。
+ */
 private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging {
   /** Set to the MapOutputTrackerMasterEndpoint living on the driver. */
-  var trackerEndpoint: RpcEndpointRef = _
+  var trackerEndpoint: RpcEndpointRef = _ // 持有 Driver 上 MapOutputTrackerMasterEndpoint 的 RpcEndpointRef 引用
 
   /**
    * The driver-side counter is incremented every time that a map output is lost. This value is sent
@@ -482,8 +488,8 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    * will clear their local caches of map output statuses and will re-fetch (possibly updated)
    * statuses from the driver.
    */
-  protected var epoch: Long = 0
-  protected val epochLock = new AnyRef
+  protected var epoch: Long = 0 // Executor 故障转移的同步标记，当 Executor 丢失后递增
+  protected val epochLock = new AnyRef // 用于保证 epoch 变量更新的线程安全
 
   /**
    * Send a message to the trackerEndpoint and get its result within a default timeout, or

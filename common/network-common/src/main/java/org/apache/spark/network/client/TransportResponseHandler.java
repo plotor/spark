@@ -17,20 +17,10 @@
 
 package org.apache.spark.network.client;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.Channel;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.spark.network.protocol.ChunkFetchFailure;
 import org.apache.spark.network.protocol.ChunkFetchSuccess;
 import org.apache.spark.network.protocol.MergedBlockMetaSuccess;
@@ -41,8 +31,18 @@ import org.apache.spark.network.protocol.StreamChunkId;
 import org.apache.spark.network.protocol.StreamFailure;
 import org.apache.spark.network.protocol.StreamResponse;
 import org.apache.spark.network.server.MessageHandler;
-import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 import org.apache.spark.network.util.TransportFrameDecoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
  * Handler that processes server responses, in response to requests issued from a
@@ -51,12 +51,18 @@ import org.apache.spark.network.util.TransportFrameDecoder;
  * Concurrency: thread safe and can be called from multiple threads.
  */
 public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
+
+  /*
+   * 用于处理服务端的响应。
+   */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportResponseHandler.class);
 
   private final Channel channel;
 
   private final Map<StreamChunkId, ChunkReceivedCallback> outstandingFetches;
 
+  /* 缓存已发出的 RPC 请求信息：<requestId, callback> */
   private final Map<Long, BaseResponseCallback> outstandingRpcs;
 
   private final Queue<Pair<String, StreamCallback>> streamCallbacks;
@@ -185,6 +191,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       }
     } else if (message instanceof RpcResponse) {
       RpcResponse resp = (RpcResponse) message;
+      // 基于 requestId 获取注册的 RpcResponseCallback
       RpcResponseCallback listener = (RpcResponseCallback) outstandingRpcs.get(resp.requestId);
       if (listener == null) {
         logger.warn("Ignoring response for RPC {} from {} ({} bytes) since it is not outstanding",
@@ -193,6 +200,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       } else {
         outstandingRpcs.remove(resp.requestId);
         try {
+          // 回调 onSuccess 方法
           listener.onSuccess(resp.body().nioByteBuffer());
         } finally {
           resp.body().release();
@@ -200,12 +208,14 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       }
     } else if (message instanceof RpcFailure) {
       RpcFailure resp = (RpcFailure) message;
+      // 基于 requestId 获取注册的 RpcResponseCallback
       BaseResponseCallback listener = outstandingRpcs.get(resp.requestId);
       if (listener == null) {
         logger.warn("Ignoring response for RPC {} from {} ({}) since it is not outstanding",
           resp.requestId, getRemoteAddress(channel), resp.errorString);
       } else {
         outstandingRpcs.remove(resp.requestId);
+        // 回调 onFailure 方法
         listener.onFailure(new RuntimeException(resp.errorString));
       }
     } else if (message instanceof MergedBlockMetaSuccess) {
@@ -282,6 +292,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
 
   /** Updates the time of the last request to the current system time. */
   public void updateTimeOfLastRequest() {
+    // 更新最近一次发送 RPC 请求的时间
     timeOfLastRequestNs.set(System.nanoTime());
   }
 

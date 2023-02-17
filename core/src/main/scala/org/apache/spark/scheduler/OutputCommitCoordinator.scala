@@ -43,11 +43,13 @@ private case class AskPermissionToCommitOutput(
  *
  * This class was introduced in SPARK-4879; see that JIRA issue (and the associated pull requests)
  * for an extensive design discussion.
+ *
+ * OutputCommitCoordinator 将决定任务是否可以提交输出到 HDFS。
  */
-private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean) extends Logging {
+private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean /* 是不是 Driver */) extends Logging {
 
   // Initialized by SparkEnv
-  var coordinatorRef: Option[RpcEndpointRef] = None
+  var coordinatorRef: Option[RpcEndpointRef] = None // 持有 OutputCommitCoordinatorEndpoint 的 RpcEndpointRef 引用
 
   // Class used to identify a committer. The task ID for a committer is implicitly defined by
   // the partition being processed, but the coordinator needs to keep track of both the stage
@@ -85,9 +87,11 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
    * If a task attempt has been authorized to commit, then all other attempts to commit the same
    * task will be denied.  If the authorized task attempt fails (e.g. due to its executor being
    * lost), then a subsequent task attempt may be authorized to commit its output.
+   * 用于向 OutputCommitCoordinatorEndpoint 发送 AskPermissionToCommitOutput 消息，
+   * 根据响应确认是否有权限将 Stage 的指定分区的输出提交到 HDFS 上
    *
-   * @param stage the stage number
-   * @param partition the partition number
+   * @param stage         the stage number
+   * @param partition     the partition number
    * @param attemptNumber how many times this task has been attempted
    *                      (see [[TaskContext.attemptNumber()]])
    * @return true if this task is authorized to commit, false otherwise
@@ -100,7 +104,8 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
     val msg = AskPermissionToCommitOutput(stage, stageAttempt, partition, attemptNumber)
     coordinatorRef match {
       case Some(endpointRef) =>
-        ThreadUtils.awaitResult(endpointRef.ask[Boolean](msg),
+        ThreadUtils.awaitResult(
+          endpointRef.ask[Boolean](msg), // 询问是否有权限
           RpcUtils.askRpcTimeout(conf).duration)
       case None =>
         logError(
@@ -124,7 +129,7 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
         logInfo(s"Reusing state from previous attempt of stage $stage.")
 
       case _ =>
-        stageStates(stage) = new StageState(maxPartitionId + 1)
+        stageStates(stage) = StageState(maxPartitionId + 1)
     }
   }
 
@@ -145,11 +150,14 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
       return
     })
     reason match {
+      // 执行成功
       case Success =>
       // The task output has been committed successfully
+      // 任务提交被拒绝
       case _: TaskCommitDenied =>
         logInfo(s"Task was denied committing, stage: $stage.$stageAttempt, " +
           s"partition: $partition, attempt: $attemptNumber")
+      // 其它原因
       case _ =>
         // Mark the attempt as failed to exclude from future commit protocol
         val taskId = TaskIdentifier(stageAttempt, attemptNumber)
@@ -171,7 +179,7 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
   }
 
   // Marked private[scheduler] instead of private so this can be mocked in tests
-  private[scheduler] def handleAskPermissionToCommit(
+  private[scheduler] def handleAskPermissionToCommit( // 判断是否有权限将给定 Stage 指定分区的数据提交到 HDFS
       stage: Int,
       stageAttempt: Int,
       partition: Int,
@@ -222,7 +230,7 @@ private[spark] object OutputCommitCoordinator {
     override def receive: PartialFunction[Any, Unit] = {
       case StopCoordinator =>
         logInfo("OutputCommitCoordinator stopped!")
-        stop()
+        stop() // 停止 OutputCommitCoordinatorEndpoint
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {

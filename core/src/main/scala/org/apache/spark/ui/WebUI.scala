@@ -21,14 +21,14 @@ import java.util.EnumSet
 import javax.servlet.DispatcherType
 import javax.servlet.http.{HttpServlet, HttpServletRequest}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashMap
 import scala.xml.Node
 
 import org.eclipse.jetty.servlet.{FilterHolder, FilterMapping, ServletContextHandler, ServletHolder}
 import org.json4s.JsonAST.{JNothing, JValue}
-
 import org.apache.spark.{SecurityManager, SparkConf, SSLOptions}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.ui.JettyUtils._
@@ -39,31 +39,42 @@ import org.apache.spark.util.Utils
  *
  * Each WebUI represents a collection of tabs, each of which in turn represents a collection of
  * pages. The use of tabs is optional, however; a WebUI may choose to include pages directly.
+ *
+ * Web UI 抽象类，定义了 Web UI 展现框架，以 JSON 格式返回数据，包含 SparkUI、MasterWeUI 和 WorkerWebUI 等实现，
+ * 分别对应 Driver、Master 和 Worker 节点，在 YARN/Mesos 模式下还有一个 HistoryServer 的扩展实现
  */
 private[spark] abstract class WebUI(
-    val securityManager: SecurityManager,
-    val sslOptions: SSLOptions,
-    port: Int,
+    val securityManager: SecurityManager, // 安全管理器
+    val sslOptions: SSLOptions, // SSL 配置
+    port: Int, // 对外访问端口
     conf: SparkConf,
-    basePath: String = "",
-    name: String = "",
+    basePath: String = "", // 基本路径
+    name: String = "", // Web UI 名称
     poolSize: Int = 200)
   extends Logging {
 
+  // Tab 数组
   protected val tabs = ArrayBuffer[WebUITab]()
+
+  // Jetty ServletContextHandler 集合
   protected val handlers = ArrayBuffer[ServletContextHandler]()
-  protected val pageToHandlers = new HashMap[WebUIPage, ArrayBuffer[ServletContextHandler]]
+
+  // Page 与 ServletContextHandler 映射，一个 Page 对应两个 Handler，分别对应 render 和 renderJson
+  protected val pageToHandlers = new mutable.HashMap[WebUIPage, ArrayBuffer[ServletContextHandler]]
+
+  // 缓存 Jetty Web Server 信息
   protected var serverInfo: Option[ServerInfo] = None
-  protected val publicHostName = Option(conf.getenv("SPARK_PUBLIC_DNS")).getOrElse(
-    conf.get(DRIVER_HOST_ADDRESS))
+  // Jetty Web Server 主机名
+  protected val publicHostName = Option(conf.getenv("SPARK_PUBLIC_DNS"))
+    .getOrElse(conf.get(DRIVER_HOST_ADDRESS))
   private val className = Utils.getFormattedClassName(this)
 
   def getBasePath: String = basePath
-  def getTabs: Seq[WebUITab] = tabs.toSeq
-  def getHandlers: Seq[ServletContextHandler] = handlers.toSeq
+  def getTabs: Seq[WebUITab] = tabs
+  def getHandlers: Seq[ServletContextHandler] = handlers
 
   def getDelegatingHandlers: Seq[DelegatingServletContextHandler] = {
-    handlers.map(new DelegatingServletContextHandler(_)).toSeq
+    handlers.map(new DelegatingServletContextHandler(_))
   }
 
   /** Attaches a tab to this UI, along with all of its attached pages. */
@@ -86,18 +97,25 @@ private[spark] abstract class WebUI(
   /** Attaches a page to this UI. */
   def attachPage(page: WebUIPage): Unit = {
     val pagePath = "/" + page.prefix
+    // 创建 render ServletContextHandler
     val renderHandler = createServletHandler(pagePath,
       (request: HttpServletRequest) => page.render(request), conf, basePath)
+    // 创建 renderJson ServletContextHandler
     val renderJsonHandler = createServletHandler(pagePath.stripSuffix("/") + "/json",
       (request: HttpServletRequest) => page.renderJson(request), conf, basePath)
     attachHandler(renderHandler)
     attachHandler(renderJsonHandler)
+    // 关联 Page 与对应的 Handler 映射
     val handlers = pageToHandlers.getOrElseUpdate(page, ArrayBuffer[ServletContextHandler]())
     handlers += renderHandler
     handlers += renderJsonHandler
   }
 
-  /** Attaches a handler to this UI. */
+  /**
+   * Attaches a handler to this UI.
+   *
+   * 添加 Jetty ServletContextHandler
+   */
   def attachHandler(handler: ServletContextHandler): Unit = synchronized {
     handlers += handler
     serverInfo.foreach(_.addHandler(handler, securityManager))
@@ -133,13 +151,22 @@ private[spark] abstract class WebUI(
    * @param path Path in UI where to mount the resources.
    */
   def addStaticHandler(resourceBase: String, path: String = "/static"): Unit = {
+    // 添加针对静态文件的 ServletContextHandler
     attachHandler(JettyUtils.createStaticHandler(resourceBase, path))
   }
 
-  /** A hook to initialize components of the UI */
+  /**
+   * A hook to initialize components of the UI
+   *
+   * 初始化所有的组件
+   */
   def initialize(): Unit
 
-  /** Binds to the HTTP server behind this web interface. */
+  /**
+   * Binds to the HTTP server behind this web interface.
+   *
+   * 启动 Jetty Web Server
+   */
   def bind(): Unit = {
     assert(serverInfo.isEmpty, s"Attempted to bind $className more than once!")
     try {
@@ -179,12 +206,23 @@ private[spark] abstract class WebUI(
 /**
  * A tab that represents a collection of pages.
  * The prefix is appended to the parent address to form a full path, and must not contain slashes.
+ *
+ * 定义标签页的规范
  */
-private[spark] abstract class WebUITab(parent: WebUI, val prefix: String) {
+private[spark] abstract class WebUITab(
+                                        parent: WebUI, // 上一级节点
+                                        val prefix: String // 当前 Tab 前缀，prefix 与上级节点路径一起构成当前 Tab 的访问路径
+                                      ) {
+  // 当前 Tab 包含的 Page 集合
   val pages = ArrayBuffer[WebUIPage]()
+
+  // 当前 Tab 名称
   val name = prefix.capitalize
 
-  /** Attach a page to this tab. This prepends the page's prefix with the tab's own prefix. */
+  /**
+   * Attach a page to this tab. This prepends the page's prefix with the tab's own prefix.
+   * 添加 Page
+   */
   def attachPage(page: WebUIPage): Unit = {
     page.prefix = (prefix + "/" + page.prefix).stripSuffix("/")
     pages += page
@@ -204,10 +242,17 @@ private[spark] abstract class WebUITab(parent: WebUI, val prefix: String) {
  * If the parent is a WebUI, the prefix is appended to the parent's address to form a full path.
  * Else, if the parent is a WebUITab, the prefix is appended to the super prefix of the parent
  * to form a relative path. The prefix must not contain slashes.
+ *
+ * 每个标签页中包含一组页面，WebUIPage 定义了页面的规范
  */
 private[spark] abstract class WebUIPage(var prefix: String) {
+
+  // 渲染页面
   def render(request: HttpServletRequest): Seq[Node]
+
+  // 生成 JSON
   def renderJson(request: HttpServletRequest): JValue = JNothing
+
 }
 
 private[spark] class DelegatingServletContextHandler(handler: ServletContextHandler) {

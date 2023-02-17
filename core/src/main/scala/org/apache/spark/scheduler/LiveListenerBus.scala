@@ -43,6 +43,11 @@ import org.apache.spark.metrics.source.Source
  */
 private[spark] class LiveListenerBus(conf: SparkConf) {
 
+  /*
+   * 考虑 EventBus 需要回调所有在册 Listener 的 listen 方法以同步的方式实现事件投递，当在册 Listener 较多时势必不能保证效率，
+   * 因此引入 AsyncEventQueue，实现了异步事件投递
+   */
+
   import LiveListenerBus._
 
   private var sparkContext: SparkContext = _

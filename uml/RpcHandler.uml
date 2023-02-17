@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.spark.network.server.RpcHandler</OriginalElement>
+  <nodes>
+    <node x="253.11538461538464" y="66.0">org.apache.spark.network.server.NoOpRpcHandler</node>
+    <node x="173.0" y="227.0">org.apache.spark.rpc.netty.NettyRpcHandler</node>
+    <node x="485.11538461538464" y="66.0">org.apache.spark.network.shuffle.ExternalBlockHandler</node>
+    <node x="-116.0" y="149.0">org.apache.spark.network.crypto.AuthRpcHandler</node>
+    <node x="-137.0" y="227.0">org.apache.spark.network.netty.NettyBlockRpcServer</node>
+    <node x="-40.88461538461536" y="66.0">org.apache.spark.network.server.AbstractAuthRpcHandler</node>
+    <node x="127.11538461538464" y="149.0">org.apache.spark.network.sasl.SaslRpcHandler</node>
+    <node x="276.5" y="-17.0">org.apache.spark.network.server.RpcHandler</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.spark.network.sasl.SaslRpcHandler" target="org.apache.spark.network.server.AbstractAuthRpcHandler" relationship="GENERALIZATION">
+      <point x="-0.5" y="-16.5" />
+      <point x="129.5" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.server.NoOpRpcHandler" target="org.apache.spark.network.server.RpcHandler" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="359.11538461538464" y="41.0" />
+      <point x="358.0" y="41.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.server.AbstractAuthRpcHandler" target="org.apache.spark.network.server.RpcHandler" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="96.11538461538464" y="41.0" />
+      <point x="358.0" y="41.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.shuffle.ExternalBlockHandler" target="org.apache.spark.network.server.RpcHandler" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="607.6153846153846" y="41.0" />
+      <point x="358.0" y="41.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.crypto.AuthRpcHandler" target="org.apache.spark.network.server.AbstractAuthRpcHandler" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="-15.0" y="124.0" />
+      <point x="96.11538461538464" y="124.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic" zoom="1.0" showDependencies="false" x="286.5" y="121.5" />
+  <SelectedNodes>
+    <node>org.apache.spark.network.netty.NettyBlockRpcServer</node>
+  </SelectedNodes>
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

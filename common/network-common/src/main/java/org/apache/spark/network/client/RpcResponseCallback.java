@@ -24,6 +24,11 @@ import java.nio.ByteBuffer;
  * failure.
  */
 public interface RpcResponseCallback extends BaseResponseCallback {
+
+  /*
+   * RpcHandler 处理完消息后进行回调的接口。
+   */
+
   /**
    * Successful serialized result from server.
    *

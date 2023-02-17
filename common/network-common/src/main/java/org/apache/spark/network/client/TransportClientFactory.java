@@ -17,15 +17,6 @@
 
 package org.apache.spark.network.client;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.codahale.metrics.MetricSet;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -39,12 +30,24 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import org.apache.spark.network.TransportContext;
+import org.apache.spark.network.server.TransportChannelHandler;
+import org.apache.spark.network.util.IOMode;
+import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.NettyMemoryMetrics;
+import org.apache.spark.network.util.NettyUtils;
+import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.TransportContext;
-import org.apache.spark.network.server.TransportChannelHandler;
-import org.apache.spark.network.util.*;
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Factory for creating {@link TransportClient}s by using createClient.
@@ -58,9 +61,14 @@ import org.apache.spark.network.util.*;
  */
 public class TransportClientFactory implements Closeable {
 
+  /*
+   * TransportClient 工厂类。
+   */
+
   /** A simple data structure to track the pool of clients between two peer nodes. */
   private static class ClientPool {
     TransportClient[] clients;
+    // 每个 client 对应一把锁，降低锁竞争带来的性能开销
     Object[] locks;
     volatile long lastConnectionFailed;
 
@@ -78,7 +86,9 @@ public class TransportClientFactory implements Closeable {
 
   private final TransportContext context;
   private final TransportConf conf;
+  // 客户端引导程序列表
   private final List<TransportClientBootstrap> clientBootstraps;
+  // 针对每个远程 Socket 地址维护一个 ClientPool 连接池
   private final ConcurrentHashMap<SocketAddress, ClientPool> connectionPool;
 
   /** Random number generator for picking connections between peers. */
@@ -101,6 +111,7 @@ public class TransportClientFactory implements Closeable {
     this.numConnectionsPerPeer = conf.numConnectionsPerPeer();
     this.rand = new Random();
 
+    // I/O 模式，默认为 NIO
     IOMode ioMode = IOMode.valueOf(conf.ioMode());
     this.socketChannelClass = NettyUtils.getClientChannelClass(ioMode);
     this.workerGroup = NettyUtils.createEventLoop(
@@ -161,9 +172,11 @@ public class TransportClientFactory implements Closeable {
       clientPool = connectionPool.get(unresolvedAddress);
     }
 
+    // 随机选择一个缓存的 TransportClient 对象
     int clientIndex = rand.nextInt(numConnectionsPerPeer);
     TransportClient cachedClient = clientPool.clients[clientIndex];
 
+    // 确认对应的 Client 处于 Active 状态并返回
     if (cachedClient != null && cachedClient.isActive()) {
       // Make sure that the channel will not timeout by updating the last use time of the
       // handler. Then check that the client is still alive, in case it timed out before
@@ -171,6 +184,7 @@ public class TransportClientFactory implements Closeable {
       TransportChannelHandler handler = cachedClient.getChannel().pipeline()
         .get(TransportChannelHandler.class);
       synchronized (handler) {
+        // 更新 TransportChannelHandler 最后一次使用时间
         handler.getResponseHandler().updateTimeOfLastRequest();
       }
 
@@ -195,6 +209,7 @@ public class TransportClientFactory implements Closeable {
           resolvMsg, resolvedAddress, hostResolveTimeMs);
     }
 
+    // 创建并返回 TransportClient
     synchronized (clientPool.locks[clientIndex]) {
       cachedClient = clientPool.clients[clientIndex];
 
@@ -268,6 +283,7 @@ public class TransportClientFactory implements Closeable {
     final AtomicReference<TransportClient> clientRef = new AtomicReference<>();
     final AtomicReference<Channel> channelRef = new AtomicReference<>();
 
+    // 设置 Channel 初始化逻辑
     bootstrap.handler(new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) {
@@ -279,6 +295,7 @@ public class TransportClientFactory implements Closeable {
 
     // Connect to the remote server
     long preConnect = System.nanoTime();
+    // 连接远程服务器
     ChannelFuture cf = bootstrap.connect(address);
     if (!cf.await(conf.connectionCreationTimeoutMs())) {
       throw new IOException(
@@ -296,6 +313,7 @@ public class TransportClientFactory implements Closeable {
     long preBootstrap = System.nanoTime();
     logger.debug("Connection to {} successful, running bootstraps...", address);
     try {
+      // 顺序应用引导程序
       for (TransportClientBootstrap clientBootstrap : clientBootstraps) {
         clientBootstrap.doBootstrap(client, channel);
       }

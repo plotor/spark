@@ -27,6 +27,10 @@ import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.storage.BlockManagerMessages._
 import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
+/**
+ * 对存在于Executor或Driver上的BlockManager进行统一管理，
+ * 代理 BlockManager 与 Driver 上的 BlockManagerMasterEndpoint 通信
+ */
 private[spark]
 class BlockManagerMaster(
     var driverEndpoint: RpcEndpointRef,

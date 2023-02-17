@@ -72,13 +72,17 @@ class SparkEnv (
     val conf: SparkConf) extends Logging {
 
   @volatile private[spark] var isStopped = false
+
+  // 所有 python 实现的 Worker 的缓存
   private val pythonWorkers = mutable.HashMap[(String, Map[String, String]), PythonWorkerFactory]()
 
+  // HadoopRDD 进行任务切分时所需要的元数据的软引用
   // A general, soft-reference map for metadata needed during HadoopRDD split computation
   // (e.g., HadoopFileRDD uses this to cache JobConfs and InputFormats).
   private[spark] val hadoopJobMetadata =
-    CacheBuilder.newBuilder().softValues().build[String, AnyRef]().asMap()
+  CacheBuilder.newBuilder().softValues().build[String, AnyRef]().asMap()
 
+  // 如果当前 SparkEnv 处于Driver 实例中，那么将创建 Driver的临时目录
   private[spark] var driverTmpDir: Option[String] = None
 
   private[spark] def stop(): Unit = {
@@ -170,9 +174,13 @@ object SparkEnv extends Logging {
     assert(conf.contains(DRIVER_HOST_ADDRESS),
       s"${DRIVER_HOST_ADDRESS.key} is not set on the driver!")
     assert(conf.contains(DRIVER_PORT), s"${DRIVER_PORT.key} is not set on the driver!")
+    // Driver 实例所在节点的地址
     val bindAddress = conf.get(DRIVER_BIND_ADDRESS)
+    // Driver 实例所在节点对外宣称的 host
     val advertiseAddress = conf.get(DRIVER_HOST_ADDRESS)
+    // Driver 实例端口
     val port = conf.get(DRIVER_PORT)
+    // I/O 加密的密钥
     val ioEncryptionKey = if (conf.get(IO_ENCRYPTION_ENABLED)) {
       Some(CryptoStreamUtils.createKey(conf))
     } else {
@@ -275,32 +283,47 @@ object SparkEnv extends Logging {
     val serializer = Utils.instantiateSerializerFromConf[Serializer](SERIALIZER, conf, isDriver)
     logDebug(s"Using serializer: ${serializer.getClass}")
 
+    // 序列化管理器
     val serializerManager = new SerializerManager(serializer, conf, ioEncryptionKey)
 
+    // 序列化器
     val closureSerializer = new JavaSerializer(conf)
 
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
       RpcEndpointRef = {
-      if (isDriver) {
+      if (isDriver) { // 当前是 Driver
         logInfo("Registering " + name)
+        // 向 Dispatcher 注册 Endpoint
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {
+        // 获取对应 RpcEndpoint 的 ref
         RpcUtils.makeDriverRef(name, conf, rpcEnv)
       }
     }
 
+    // Broadcast 管理器
     val broadcastManager = new BroadcastManager(isDriver, conf)
 
+    // map 任务输出 tracker
     val mapOutputTracker = if (isDriver) {
+      /*
+       * 如果是 Driver，则创建 MapOutputTrackerMaster，
+       * 然后创建 MapOutputTrackerMasterEndpoint，并且注册到 Dispatcher 中，注册名为 MapOutputTracker。
+       */
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
+      /*
+       * 如果当前应用程序是 Executor，则创建 MapOutputTrackerWorker，
+       * 并从远端 Driver 实例的 NettyRpcEnv 的 Dispatcher 中查找 MapOutputTrackerMasterEndpoint 的引用。
+       */
       new MapOutputTrackerWorker(conf)
     }
 
     // Have to assign trackerEndpoint after initialization as MapOutputTrackerEndpoint
     // requires the MapOutputTracker itself
-    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,
+    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(
+      MapOutputTracker.ENDPOINT_NAME,
       new MapOutputTrackerMasterEndpoint(
         rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf))
 
@@ -311,11 +334,13 @@ object SparkEnv extends Logging {
     val shuffleMgrName = conf.get(config.SHUFFLE_MANAGER)
     val shuffleMgrClass =
       shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase(Locale.ROOT), shuffleMgrName)
-    val shuffleManager = Utils.instantiateSerializerOrShuffleManager[ShuffleManager](
-      shuffleMgrClass, conf, isDriver)
+    // 创建 ShuffleManager
+    val shuffleManager = Utils.instantiateSerializerOrShuffleManager[ShuffleManager](shuffleMgrClass, conf, isDriver)
 
+    // 创建 MemoryManager
     val memoryManager: MemoryManager = UnifiedMemoryManager(conf, numUsableCores)
 
+    // 获取块传输服务 BlockTransferService 对外的端口号
     val blockManagerPort = if (isDriver) {
       conf.get(DRIVER_BLOCK_MANAGER_PORT)
     } else {
@@ -332,6 +357,7 @@ object SparkEnv extends Logging {
 
     // Mapping from block manager id to the block manager's information.
     val blockManagerInfo = new concurrent.TrieMap[BlockManagerId, BlockManagerInfo]()
+    // 创建 BlockManagerMaster
     val blockManagerMaster = new BlockManagerMaster(
       registerOrLookupEndpoint(
         BlockManagerMaster.DRIVER_ENDPOINT_NAME,
@@ -352,9 +378,11 @@ object SparkEnv extends Logging {
       conf,
       isDriver)
 
-    val blockTransferService =
-      new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
-        blockManagerPort, numUsableCores, blockManagerMaster.driverEndpoint)
+    // 创建块传输服务 BlockTransferService，
+    // 也正是因为 MapOutputTracker 与 NettyBlockTransferService 的配合，才实现了 Spark 的 Shuffle。
+    val blockTransferService = new NettyBlockTransferService(
+      conf, securityManager, bindAddress, advertiseAddress,
+      blockManagerPort, numUsableCores, blockManagerMaster.driverEndpoint)
 
     // NB: blockManager is not valid until initialize() is called later.
     val blockManager = new BlockManager(
@@ -370,6 +398,7 @@ object SparkEnv extends Logging {
       securityManager,
       externalShuffleClient)
 
+    // 创建度量系统
     val metricsSystem = if (isDriver) {
       // Don't start metrics system right now for Driver.
       // We need to wait for the task scheduler to give us an app ID.
@@ -388,6 +417,10 @@ object SparkEnv extends Logging {
     val outputCommitCoordinator = mockOutputCommitCoordinator.getOrElse {
       new OutputCommitCoordinator(conf, isDriver)
     }
+    /*
+     * 如果当前是 Driver，则创建 OutputCommitCoordinatorEndpoint，并且注册到 Dispatcher 中，注册名为 OutputCommitCoordinator。
+     * 如果当前是 Executor，则从远端 Driver 实例的 NettyRpcEnv 的 Dispatcher 中查找 OutputCommitCoordinatorEndpoint 的引用。
+     */
     val outputCommitCoordinatorRef = registerOrLookupEndpoint("OutputCommitCoordinator",
       new OutputCommitCoordinatorEndpoint(rpcEnv, outputCommitCoordinator))
     outputCommitCoordinator.coordinatorRef = Some(outputCommitCoordinatorRef)

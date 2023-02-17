@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.spark.network.protocol.Message</OriginalElement>
+  <nodes>
+    <node x="2239.25" y="242.0">org.apache.spark.network.protocol.OneWayMessage</node>
+    <node x="1613.0625" y="325.0">org.apache.spark.network.protocol.UploadStream</node>
+    <node x="518.25" y="242.0">org.apache.spark.network.protocol.StreamFailure</node>
+    <node x="1718.25" y="242.0">org.apache.spark.network.protocol.MergedBlockMetaRequest</node>
+    <node x="491.75" y="149.0">org.apache.spark.network.protocol.ResponseMessage</node>
+    <node x="960.25" y="242.0">org.apache.spark.network.protocol.RpcFailure</node>
+    <node x="1318.75" y="149.0">org.apache.spark.network.protocol.AbstractMessage</node>
+    <node x="1721.75" y="-17.0">org.apache.spark.network.protocol.Encodable</node>
+    <node x="588.0" y="325.0">org.apache.spark.network.protocol.ChunkFetchSuccess</node>
+    <node x="1532.25" y="242.0">org.apache.spark.network.protocol.RpcRequest</node>
+    <node x="2471.25" y="242.0">org.apache.spark.network.protocol.ChunkFetchRequest</node>
+    <node x="1337.25" y="242.0">org.apache.spark.network.sasl.SaslMessage</node>
+    <node x="203.25" y="242.0">org.apache.spark.network.protocol.AbstractResponseMessage</node>
+    <node x="79.0" y="325.0">org.apache.spark.network.protocol.MergedBlockMetaSuccess</node>
+    <node x="-148.0" y="325.0">org.apache.spark.network.protocol.StreamResponse</node>
+    <node x="1727.75" y="66.0">org.apache.spark.network.protocol.Message</node>
+    <node x="718.25" y="242.0">org.apache.spark.network.protocol.ChunkFetchFailure</node>
+    <node x="1880.875" y="149.0">org.apache.spark.network.protocol.RequestMessage</node>
+    <node x="388.0" y="325.0">org.apache.spark.network.protocol.RpcResponse</node>
+    <node x="2025.25" y="242.0">org.apache.spark.network.protocol.StreamRequest</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.spark.network.protocol.UploadStream" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="92.0" y="-0.0" />
+      <point x="2723.75" y="341.5" />
+      <point x="2723.75" y="165.5" />
+      <point x="104.5" y="-0.0" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RequestMessage" target="org.apache.spark.network.protocol.Message" relationship="INTERFACE_GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="1985.375" y="119.0" />
+      <point x="1832.75" y="119.0" />
+      <point x="35.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RpcFailure" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="38.25" y="-16.5" />
+      <point x="1075.0" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RpcResponse" target="org.apache.spark.network.protocol.AbstractResponseMessage" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="478.0" y="300.0" />
+      <point x="350.75" y="300.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.StreamRequest" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="48.5" y="-16.5" />
+      <point x="2170.75" y="202.0" />
+      <point x="1985.375" y="202.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RpcFailure" target="org.apache.spark.network.protocol.ResponseMessage" relationship="REALIZATION">
+      <point x="-38.25" y="-16.5" />
+      <point x="998.5" y="222.0" />
+      <point x="603.25" y="222.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.StreamRequest" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-48.5" y="-16.5" />
+      <point x="2073.75" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.OneWayMessage" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-53.0" y="-16.5" />
+      <point x="2292.25" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.sasl.SaslMessage" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RpcRequest" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-41.5" y="-16.5" />
+      <point x="1573.75" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ChunkFetchFailure" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="55.5" y="-16.5" />
+      <point x="884.75" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.AbstractResponseMessage" target="org.apache.spark.network.protocol.ResponseMessage" relationship="REALIZATION">
+      <point x="-73.75" y="-16.5" />
+      <point x="277.0" y="222.0" />
+      <point x="603.25" y="222.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.RpcRequest" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="41.5" y="-16.5" />
+      <point x="1656.75" y="202.0" />
+      <point x="1985.375" y="202.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.StreamFailure" target="org.apache.spark.network.protocol.ResponseMessage" relationship="REALIZATION">
+      <point x="-45.0" y="-16.5" />
+      <point x="563.25" y="222.0" />
+      <point x="603.25" y="222.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.StreamResponse" target="org.apache.spark.network.protocol.AbstractResponseMessage" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="-44.5" y="300.0" />
+      <point x="350.75" y="300.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.MergedBlockMetaSuccess" target="org.apache.spark.network.protocol.AbstractResponseMessage" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="223.5" y="300.0" />
+      <point x="350.75" y="300.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.AbstractMessage" target="org.apache.spark.network.protocol.Message" relationship="REALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="1424.75" y="119.0" />
+      <point x="1762.75" y="119.0" />
+      <point x="-35.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.StreamFailure" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="45.0" y="-16.5" />
+      <point x="653.25" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ChunkFetchFailure" target="org.apache.spark.network.protocol.ResponseMessage" relationship="REALIZATION">
+      <point x="-55.5" y="-16.5" />
+      <point x="773.75" y="222.0" />
+      <point x="603.25" y="222.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.OneWayMessage" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="53.0" y="-16.5" />
+      <point x="2398.25" y="202.0" />
+      <point x="1985.375" y="202.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ChunkFetchRequest" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="58.75" y="-16.5" />
+      <point x="2647.5" y="202.0" />
+      <point x="1985.375" y="202.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ChunkFetchSuccess" target="org.apache.spark.network.protocol.AbstractResponseMessage" relationship="GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="706.5" y="300.0" />
+      <point x="350.75" y="300.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ChunkFetchRequest" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-58.75" y="-16.5" />
+      <point x="2530.0" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.ResponseMessage" target="org.apache.spark.network.protocol.Message" relationship="INTERFACE_GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="603.25" y="129.0" />
+      <point x="1985.375" y="129.0" />
+      <point x="1985.375" y="119.0" />
+      <point x="1832.75" y="119.0" />
+      <point x="35.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.AbstractResponseMessage" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="73.75" y="-16.5" />
+      <point x="424.5" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.MergedBlockMetaRequest" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-71.75" y="-16.5" />
+      <point x="1790.0" y="212.0" />
+      <point x="1424.75" y="212.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.MergedBlockMetaRequest" target="org.apache.spark.network.protocol.RequestMessage" relationship="REALIZATION">
+      <point x="71.75" y="-16.5" />
+      <point x="1933.5" y="202.0" />
+      <point x="1985.375" y="202.0" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.Message" target="org.apache.spark.network.protocol.Encodable" relationship="INTERFACE_GENERALIZATION">
+      <point x="0.0" y="-16.5" />
+      <point x="0.0" y="16.5" />
+    </edge>
+    <edge source="org.apache.spark.network.protocol.UploadStream" target="org.apache.spark.network.protocol.AbstractMessage" relationship="GENERALIZATION">
+      <point x="-92.0" y="-0.0" />
+      <point x="1319.75" y="341.5" />
+      <point x="-105.0" y="16.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic" zoom="0.5423131170662906" showDependencies="false" x="1289.5" y="180.5" />
+  <SelectedNodes>
+    <node>org.apache.spark.network.protocol.UploadStream</node>
+  </SelectedNodes>
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

@@ -64,9 +64,10 @@ import org.apache.spark.util.io.ChunkedByteBuffer
 
 /* Class for returning a fetched block and associated metrics. */
 private[spark] class BlockResult(
-    val data: Iterator[Any],
+    val data: Iterator[Any], // Block及与Block相关联的度量数据
+    // 读取 Block 的方法，包含 Memory、Disk、Hadoop、Network 四个枚举值
     val readMethod: DataReadMethod.Value,
-    val bytes: Long)
+    val bytes: Long) // 读取的 Block 的字节长度
 
 /**
  * Abstracts away how blocks are stored and provides different ways to read the underlying block
@@ -167,6 +168,8 @@ private[spark] class HostLocalDirManager(
  * retrieving blocks both locally and remotely into various stores (memory, disk, and off-heap).
  *
  * Note that [[initialize()]] must be called before the BlockManager is usable.
+ *
+ * Block 管理器（运行在每个节点上，包括 Driver 和 Executor），囊括了存储体系的所有组件和功能，是存储体系中最重要的组件
  */
 private[spark] class BlockManager(
     val executorId: String,

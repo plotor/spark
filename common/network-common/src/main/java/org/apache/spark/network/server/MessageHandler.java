@@ -26,14 +26,14 @@ import org.apache.spark.network.protocol.Message;
  */
 public abstract class MessageHandler<T extends Message> {
   /** Handles the receipt of a single message. */
-  public abstract void handle(T message) throws Exception;
+  public abstract void handle(T message) throws Exception; // 接收并处理收到的单条消息
 
   /** Invoked when the channel this MessageHandler is on is active. */
-  public abstract void channelActive();
+  public abstract void channelActive(); // 当前 channel 被激活时调用
 
   /** Invoked when an exception was caught on the Channel. */
-  public abstract void exceptionCaught(Throwable cause);
+  public abstract void exceptionCaught(Throwable cause); // 捕获当前 channel 发生的异常
 
   /** Invoked when the channel this MessageHandler is on is inactive. */
-  public abstract void channelInactive();
+  public abstract void channelInactive(); // 当前 channel 处于 inactive 时被调用
 }

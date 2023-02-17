@@ -43,19 +43,26 @@ import org.apache.spark.util.{ShutdownHookManager, Utils}
  * SPARK_LOCAL_DIRS, if it's set).
  *
  * ShuffleDataIO also can change the behavior of deleteFilesOnStop.
+ *
+ * 磁盘块管理器，对磁盘上的文件及目录的读写操作进行管理。
  */
 private[spark] class DiskBlockManager(
     conf: SparkConf,
+    /*
+     * 停止 DiskBlockManager 的时候是否删除本地目录。
+     * 当不指定外部的ShuffleClient（即spark.shuffle.service.enabled属性为false）或者当前实例是Driver时，此属性为true。
+     */
     var deleteFilesOnStop: Boolean,
     isDriver: Boolean)
   extends Logging {
 
+  // 磁盘存储 DiskStore 的本地子目录的数量
   private[spark] val subDirsPerLocalDir = conf.get(config.DISKSTORE_SUB_DIRECTORIES)
 
   /* Create one local directory for each path mentioned in spark.local.dir; then, inside this
    * directory, create multiple subdirectories that we will hash files into, in order to avoid
    * having really large inodes at the top level. */
-  private[spark] val localDirs: Array[File] = createLocalDirs(conf)
+  private[spark] val localDirs: Array[File] = createLocalDirs(conf) // 本地目录数组
   if (localDirs.isEmpty) {
     logError("Failed to create any local dir.")
     System.exit(ExecutorExitCode.DISK_STORE_FAILED_TO_CREATE_DIR)
@@ -65,6 +72,7 @@ private[spark] class DiskBlockManager(
 
   // The content of subDirs is immutable but the content of subDirs(i) is mutable. And the content
   // of subDirs(i) is protected by the lock of subDirs(i)
+  // DiskStore 的本地子目录的二维数组
   private val subDirs = Array.fill(localDirs.length)(new Array[File](subDirsPerLocalDir))
 
   // Get merge directory name, append attemptId if there is any
@@ -79,6 +87,7 @@ private[spark] class DiskBlockManager(
   /** Looks up a file by hashing it into one of our local subdirectories. */
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExecutorDiskUtils#getFile().
+  // 根据指定的文件名获取文件
   def getFile(filename: String): File = {
     // Figure out which local directory it hashes to, and which subdirectory in that
     val hash = Utils.nonNegativeHash(filename)
@@ -103,6 +112,7 @@ private[spark] class DiskBlockManager(
     new File(subDir, filename)
   }
 
+  // 根据BlockId获取文件
   def getFile(blockId: BlockId): File = getFile(blockId.name)
 
   /**
@@ -165,6 +175,7 @@ private[spark] class DiskBlockManager(
     }
   }
 
+  // 为中间结果创建唯一的BlockId和文件，将用于保存本地Block的数据
   /** Produces a unique block id and File suitable for storing local intermediate results. */
   def createTempLocalBlock(): (TempLocalBlockId, File) = {
     var blockId = new TempLocalBlockId(UUID.randomUUID())
@@ -174,6 +185,7 @@ private[spark] class DiskBlockManager(
     (blockId, getFile(blockId))
   }
 
+  // 创建唯一的BlockId和文件，用来存储Shuffle中间结果（即map任务的输出）
   /** Produces a unique block id and File suitable for storing shuffled intermediate results. */
   def createTempShuffleBlock(): (TempShuffleBlockId, File) = {
     var blockId = new TempShuffleBlockId(UUID.randomUUID())

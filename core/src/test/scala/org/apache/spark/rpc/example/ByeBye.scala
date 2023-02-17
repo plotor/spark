@@ -15,16 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.spark.metrics.source
+package org.apache.spark.rpc.example
 
-import com.codahale.metrics.MetricRegistry
-
-private[spark] trait Source {
-
-  // Metrics Source 名称
-  def sourceName: String
-
-  // 当前 Metrics Source 的注册表
-  def metricRegistry: MetricRegistry
-
-}
+/**
+ * Byebye message.
+ *
+ * @author zhenchao.wang 2023-01-16 20:43
+ * @version 1.0.0
+ */
+case class ByeBye(msg: String)

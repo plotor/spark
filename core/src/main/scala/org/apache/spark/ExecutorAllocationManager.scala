@@ -228,10 +228,12 @@ private[spark] class ExecutorAllocationManager(
    * the scheduling task.
    */
   def start(): Unit = {
+    // 将 ExecutorAllocationListener 注册到事件总线
     listenerBus.addToManagementQueue(listener)
     listenerBus.addToManagementQueue(executorMonitor)
     cleaner.foreach(_.attachListener(executorMonitor))
 
+    // 创建定时调度任务（100ms），动态调整待执行的 Executor 请求数量和运行的 Executor 数量
     val scheduleTask = new Runnable() {
       override def run(): Unit = {
         try {
@@ -256,7 +258,12 @@ private[spark] class ExecutorAllocationManager(
       (numTarget, numLocality)
     }
 
-    client.requestTotalExecutors(numExecutorsTarget, numLocalityAware, rpIdToHostToLocalTaskCount)
+    // 获取所有的 Executor 数量
+    client.requestTotalExecutors(
+      numExecutorsTarget, // 动态分配的 Executor 总数
+      numLocalityAware, // 本地感知的 Task 数量
+      rpIdToHostToLocalTaskCount // 希望在此节点上运行的 Task 数量之间的映射关系
+    )
   }
 
   /**
@@ -343,9 +350,11 @@ private[spark] class ExecutorAllocationManager(
       initializing = false
     }
 
+    // 重新计算所需的 Executor 数量，并更新请求的 Executor 数量
     // Update executor target number only after initializing flag is unset
     updateAndSyncNumExecutorsTarget(clock.nanoTime())
     if (executorIdsToBeRemoved.nonEmpty) {
+      // 对过期的 Executor 进行删除
       removeExecutors(executorIdsToBeRemoved)
     }
   }
@@ -373,6 +382,7 @@ private[spark] class ExecutorAllocationManager(
 
       // Update targets for all ResourceProfiles then do a single request to the cluster manager
       numExecutorsTargetPerResourceProfileId.foreach { case (rpId, targetExecs) =>
+        // 获取实际需要的 Executor 最大数量
         val maxNeeded = maxNumExecutorsNeededPerResourceProfile(rpId)
         if (maxNeeded < targetExecs) {
           // The target number exceeds the number we actually need, so stop adding new
@@ -383,8 +393,10 @@ private[spark] class ExecutorAllocationManager(
           // the target number in case an executor just happens to get lost (e.g., bad hardware,
           // or the cluster manager preempts it) -- in that case, there is no point in trying
           // to immediately  get a new executor, since we wouldn't even use it yet.
+          // 减少需要的 Executor 数量
           decrementExecutorsFromTarget(maxNeeded, rpId, updatesNeeded)
         } else if (addTime != NOT_SET && now >= addTime) {
+          // 添加 Executor
           addExecutorsToTarget(maxNeeded, rpId, updatesNeeded)
         }
       }

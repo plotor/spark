@@ -41,17 +41,27 @@ import org.apache.spark.util.{SizeEstimator, Utils}
 import org.apache.spark.util.collection.SizeTrackingVector
 import org.apache.spark.util.io.{ChunkedByteBuffer, ChunkedByteBufferOutputStream}
 
+/**
+ * Spark将内存中的Block抽象为MemoryEntry
+ */
 private sealed trait MemoryEntry[T] {
-  def size: Long
-  def memoryMode: MemoryMode
-  def classTag: ClassTag[T]
+  def size: Long // 当前 Block 大小
+  def memoryMode: MemoryMode // 内存模式
+  def classTag: ClassTag[T] // Block 类型标记
 }
+/**
+ * 反序列化后的 MemoryEntry
+ */
 private case class DeserializedMemoryEntry[T](
     value: Array[T],
     size: Long,
     memoryMode: MemoryMode,
     classTag: ClassTag[T]) extends MemoryEntry[T] {
 }
+
+/**
+ * 序列化后的 MemoryEntry
+ */
 private case class SerializedMemoryEntry[T](
     buffer: ChunkedByteBuffer,
     memoryMode: MemoryMode,
@@ -79,33 +89,41 @@ private[storage] trait BlockEvictionHandler {
 /**
  * Stores blocks in memory, either as Arrays of deserialized Java objects or as
  * serialized ByteBuffers.
+ *
+ * 内存存储，依赖于 MemoryManager，负责对 Block 的内存存储。
  */
 private[spark] class MemoryStore(
     conf: SparkConf,
     blockInfoManager: BlockInfoManager,
     serializerManager: SerializerManager,
     memoryManager: MemoryManager,
+    // 用于将Block从内存中驱逐出去
     blockEvictionHandler: BlockEvictionHandler)
   extends Logging {
 
   // Note: all changes to memory allocations, notably putting blocks, evicting blocks, and
   // acquiring or releasing unroll memory, must be synchronized on `memoryManager`!
 
+  // 内存中的 BlockId 与 MemoryEntry（Block的内存形式）之间映射关系的缓存
   private val entries = new LinkedHashMap[BlockId, MemoryEntry[_]](32, 0.75f, true)
 
+  // 任务尝试线程的 TaskAttemptId 与任务尝试线程在堆内存展开的所有 Block 占用的内存大小之和之间的映射关系
   // A mapping from taskAttemptId to amount of memory used for unrolling a block (in bytes)
   // All accesses of this map are assumed to have manually synchronized on `memoryManager`
   private val onHeapUnrollMemoryMap = mutable.HashMap[Long, Long]()
+
+  // 任务尝试线程的 TaskAttemptId 与任务尝试线程在堆外内存展开的所有 Block 占用的内存大小之和之间的映射关系
   // Note: off-heap unroll memory is only used in putIteratorAsBytes() because off-heap caching
   // always stores serialized values.
   private val offHeapUnrollMemoryMap = mutable.HashMap[Long, Long]()
 
+  // 展开任何Block之前，初始请求的内存大小
   // Initial memory to request before unrolling any block
   private val unrollMemoryThreshold: Long =
     conf.get(STORAGE_UNROLL_MEMORY_THRESHOLD)
 
   /** Total amount of memory available for storage, in bytes. */
-  private def maxMemory: Long = {
+  private def maxMemory: Long = { // 用于存储Block的最大内存
     memoryManager.maxOnHeapStorageMemory + memoryManager.maxOffHeapStorageMemory
   }
 
@@ -118,13 +136,13 @@ private[spark] class MemoryStore(
   logInfo("MemoryStore started with capacity %s".format(Utils.bytesToString(maxMemory)))
 
   /** Total storage memory used including unroll memory, in bytes. */
-  private def memoryUsed: Long = memoryManager.storageMemoryUsed
+  private def memoryUsed: Long = memoryManager.storageMemoryUsed // 已经使用的内存大小
 
   /**
    * Amount of storage memory, in bytes, used for caching blocks.
    * This does not include memory used for unrolling.
    */
-  private def blocksMemoryUsed: Long = memoryManager.synchronized {
+  private def blocksMemoryUsed: Long = memoryManager.synchronized { // 用于存储Block（即MemoryEntry）使用的内存大小
     memoryUsed - currentUnrollMemory
   }
 
@@ -606,14 +624,14 @@ private[spark] class MemoryStore(
   /**
    * Return the amount of memory currently occupied for unrolling blocks across all tasks.
    */
-  def currentUnrollMemory: Long = memoryManager.synchronized {
+  def currentUnrollMemory: Long = memoryManager.synchronized { // 用于展开Block使用的内存大小
     onHeapUnrollMemoryMap.values.sum + offHeapUnrollMemoryMap.values.sum
   }
 
   /**
    * Return the amount of memory currently occupied for unrolling blocks by this task.
    */
-  def currentUnrollMemoryForThisTask: Long = memoryManager.synchronized {
+  def currentUnrollMemoryForThisTask: Long = memoryManager.synchronized { // 当前的任务尝试线程用于展开Block所占用的内存
     onHeapUnrollMemoryMap.getOrElse(currentTaskAttemptId(), 0L) +
       offHeapUnrollMemoryMap.getOrElse(currentTaskAttemptId(), 0L)
   }
@@ -621,7 +639,7 @@ private[spark] class MemoryStore(
   /**
    * Return the number of tasks currently unrolling blocks.
    */
-  private def numTasksUnrolling: Int = memoryManager.synchronized {
+  private def numTasksUnrolling: Int = memoryManager.synchronized { // 当前使用MemoryStore展开Block的任务的数量
     (onHeapUnrollMemoryMap.keys ++ offHeapUnrollMemoryMap.keys).toSet.size
   }
 

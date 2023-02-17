@@ -39,6 +39,8 @@ import org.apache.spark.util.Utils
 private[netty] class NettyStreamManager(rpcEnv: NettyRpcEnv)
   extends StreamManager with RpcEnvFileServer {
 
+  /* 为 NettyRpcEnv 提供文件服务能力，包括对于文件、jar，以及目录的下载支持 */
+
   private val files = new ConcurrentHashMap[String, File]()
   private val jars = new ConcurrentHashMap[String, File]()
   private val dirs = new ConcurrentHashMap[String, File]()
@@ -59,6 +61,7 @@ private[netty] class NettyStreamManager(rpcEnv: NettyRpcEnv)
     }
 
     if (file != null && file.isFile()) {
+      // 从缓存中获取文件后，将 TransportConf 及 File 等信息封装为 FileSegmentManagedBuffer 并返回
       new FileSegmentManagedBuffer(rpcEnv.transportConf, file, 0, file.length())
     } else {
       null

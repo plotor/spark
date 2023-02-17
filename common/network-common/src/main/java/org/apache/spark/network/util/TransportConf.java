@@ -17,17 +17,21 @@
 
 package org.apache.spark.network.util;
 
+import com.google.common.primitives.Ints;
+import io.netty.util.NettyRuntime;
+
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-
-import com.google.common.primitives.Ints;
-import io.netty.util.NettyRuntime;
 
 /**
  * A central location that tracks all the settings we expose to users.
  */
 public class TransportConf {
+
+  /*
+   * 传输上下文的配置信息
+   */
 
   private final String SPARK_NETWORK_IO_MODE_KEY;
   private final String SPARK_NETWORK_IO_PREFERDIRECTBUFS_KEY;

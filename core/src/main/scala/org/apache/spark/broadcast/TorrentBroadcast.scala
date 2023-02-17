@@ -66,16 +66,16 @@ private[spark] class TorrentBroadcast[T: ClassTag](obj: T, id: Long)
    * a soft reference so that it can be garbage collected if required, as we can always reconstruct
    * in the future.
    */
-  @transient private var _value: SoftReference[T] = _
+  @transient private var _value: SoftReference[T] = _ // 从 Executor 或 Driver 上读取的广播变量值
 
   /** The compression codec to use, or None if compression is disabled */
-  @transient private var compressionCodec: Option[CompressionCodec] = _
+  @transient private var compressionCodec: Option[CompressionCodec] = _ // Broadcast 变量的编解码器
   /** Size of each block. Default value is 4MB.  This value is only read by the broadcaster. */
-  @transient private var blockSize: Int = _
+  @transient private var blockSize: Int = _ // 块大小
 
 
   /** Whether to generate checksum for blocks or not. */
-  private var checksumEnabled: Boolean = false
+  private var checksumEnabled: Boolean = false // 是否生成 checksum
 
   private def setConf(conf: SparkConf): Unit = {
     compressionCodec = if (conf.get(config.BROADCAST_COMPRESS)) {
@@ -89,13 +89,14 @@ private[spark] class TorrentBroadcast[T: ClassTag](obj: T, id: Long)
   }
   setConf(SparkEnv.get.conf)
 
+  // Broadcast ID
   private val broadcastId = BroadcastBlockId(id)
 
   /** Total number of blocks this broadcast variable contains. */
-  private val numBlocks: Int = writeBlocks(obj)
+  private val numBlocks: Int = writeBlocks(obj) // Broadcast 包含的块数
 
   /** The checksum for all the blocks. */
-  private var checksums: Array[Int] = _
+  private var checksums: Array[Int] = _ // 存储每个 broadcast 块的 checksum
 
   override protected def getValue() = synchronized {
     val memoized: T = if (_value == null) null.asInstanceOf[T] else _value.get

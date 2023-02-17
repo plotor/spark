@@ -17,25 +17,24 @@
 
 package org.apache.spark.network.server;
 
-import java.net.SocketAddress;
-
 import com.google.common.base.Throwables;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.protocol.ChunkFetchFailure;
 import org.apache.spark.network.protocol.ChunkFetchRequest;
 import org.apache.spark.network.protocol.ChunkFetchSuccess;
 import org.apache.spark.network.protocol.Encodable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.apache.spark.network.util.NettyUtils.*;
+import java.net.SocketAddress;
+
+import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
  * A dedicated ChannelHandler for processing ChunkFetchRequest messages. When sending response

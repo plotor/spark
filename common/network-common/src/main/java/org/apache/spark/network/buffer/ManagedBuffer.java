@@ -36,36 +36,38 @@ import java.nio.ByteBuffer;
  */
 public abstract class ManagedBuffer {
 
+  /* 不可变数据视图 */
+
   /**
    * Number of bytes of the data. If this buffer will decrypt for all of the views into the data,
    * this is the size of the decrypted data.
    */
-  public abstract long size();
+  public abstract long size(); // 数据的字节数
 
   /**
    * Exposes this buffer's data as an NIO ByteBuffer. Changing the position and limit of the
    * returned ByteBuffer should not affect the content of this buffer.
    */
   // TODO: Deprecate this, usage may require expensive memory mapping or allocation.
-  public abstract ByteBuffer nioByteBuffer() throws IOException;
+  public abstract ByteBuffer nioByteBuffer() throws IOException; // 将数据转换成 ByteBuffer 返回
 
   /**
    * Exposes this buffer's data as an InputStream. The underlying implementation does not
    * necessarily check for the length of bytes read, so the caller is responsible for making sure
    * it does not go over the limit.
    */
-  public abstract InputStream createInputStream() throws IOException;
+  public abstract InputStream createInputStream() throws IOException; // 将数据转换成 InputStream 返回
 
   /**
    * Increment the reference count by one if applicable.
    */
-  public abstract ManagedBuffer retain();
+  public abstract ManagedBuffer retain(); // 递增当前视图的引用计数
 
   /**
    * If applicable, decrement the reference count by one and deallocates the buffer if the
    * reference count reaches zero.
    */
-  public abstract ManagedBuffer release();
+  public abstract ManagedBuffer release(); // 递减当前视图的引用计数
 
   /**
    * Convert the buffer into an Netty object, used to write the data out. The return value is either
@@ -74,5 +76,5 @@ public abstract class ManagedBuffer {
    * If this method returns a ByteBuf, then that buffer's reference count will be incremented and
    * the caller will be responsible for releasing this new reference.
    */
-  public abstract Object convertToNetty() throws IOException;
+  public abstract Object convertToNetty() throws IOException; // 将数据转换成 Netty 对象（ByteBuf 或 FileRegion），用于写到外部
 }

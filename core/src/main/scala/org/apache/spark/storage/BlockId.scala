@@ -30,15 +30,21 @@ import org.apache.spark.network.shuffle.RemoteBlockPushResolver
  * set of keys which produce its unique name.
  *
  * If your BlockId should be serializable, be sure to add it to the BlockId.apply() method.
+ *
+ * 在 Spark 的存储体系中，数据的读写也是以块为单位，每个 Block 都有唯一的标识，Spark 把这个标识抽象为 BlockId。
  */
 @DeveloperApi
 sealed abstract class BlockId {
   /** A globally unique identifier for this Block. Can be used for ser/de. */
-  def name: String
+  def name: String // 全局唯一的标识名
 
   // convenience methods
   def asRDDId: Option[RDDBlockId] = if (isRDD) Some(asInstanceOf[RDDBlockId]) else None
+
+  // 是否是 RDDBlockId
   def isRDD: Boolean = isInstanceOf[RDDBlockId]
+
+  // 是否是 ShuffleBlockId
   def isShuffle: Boolean = {
     (isInstanceOf[ShuffleBlockId] || isInstanceOf[ShuffleBlockBatchId] ||
      isInstanceOf[ShuffleDataBlockId] || isInstanceOf[ShuffleIndexBlockId])

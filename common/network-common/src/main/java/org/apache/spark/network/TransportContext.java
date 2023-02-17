@@ -17,19 +17,12 @@
 
 package org.apache.spark.network;
 
-import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.codahale.metrics.Counter;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.client.TransportClientBootstrap;
 import org.apache.spark.network.client.TransportClientFactory;
@@ -46,6 +39,12 @@ import org.apache.spark.network.util.IOMode;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.TransportConf;
 import org.apache.spark.network.util.TransportFrameDecoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Contains the context to create a {@link TransportServer}, {@link TransportClientFactory}, and to
@@ -62,9 +61,17 @@ import org.apache.spark.network.util.TransportFrameDecoder;
  * processes to send messages back to the client on an existing channel.
  */
 public class TransportContext implements Closeable {
+
+  /*
+   * 传输上下文，包含了用于创建传输服务端（TransportServer）和传输客户端工厂（TransportClientFactory）的上下文信息，
+   * 并支持使用 TransportChannelHandler 设置 Netty 提供的 SocketChannel 的 Pipeline 的实现。
+   */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportContext.class);
 
+  // 传输上下文的配置信息
   private final TransportConf conf;
+  // 处理来自客户端的请求
   private final RpcHandler rpcHandler;
   private final boolean closeIdleConnections;
   // Number of registered connections to the shuffle service
@@ -139,6 +146,7 @@ public class TransportContext implements Closeable {
    * to create a Client.
    */
   public TransportClientFactory createClientFactory(List<TransportClientBootstrap> bootstraps) {
+    // 构造 TransportClientFactory 对象，用于创建 TransportClient
     return new TransportClientFactory(this, bootstraps);
   }
 
@@ -148,6 +156,7 @@ public class TransportContext implements Closeable {
 
   /** Create a server which will attempt to bind to a specific port. */
   public TransportServer createServer(int port, List<TransportServerBootstrap> bootstraps) {
+    // 创建并启动服务端
     return new TransportServer(this, null, port, rpcHandler, bootstraps);
   }
 
@@ -186,7 +195,9 @@ public class TransportContext implements Closeable {
       SocketChannel channel,
       RpcHandler channelRpcHandler) {
     try {
+      // 构造 Channel 处理器，将消息委托给 TransportResponseHandler 和 TransportRequestHandler 进行处理
       TransportChannelHandler channelHandler = createChannelHandler(channel, channelRpcHandler);
+      // 设置消息编解码器、处理器
       ChannelPipeline pipeline = channel.pipeline()
         .addLast("encoder", ENCODER)
         .addLast(TransportFrameDecoder.HANDLER_NAME, NettyUtils.createFrameDecoder())
@@ -216,7 +227,9 @@ public class TransportContext implements Closeable {
    * properties (such as the remoteAddress()) may not be available yet.
    */
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
+    // 构造响应消息处理器
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);
+    // 构造 RPC 客户端
     TransportClient client = new TransportClient(channel, responseHandler);
     boolean separateChunkFetchRequest = conf.separateChunkFetchRequest();
     ChunkFetchRequestHandler chunkFetchRequestHandler = null;
@@ -225,8 +238,10 @@ public class TransportContext implements Closeable {
         client, rpcHandler.getStreamManager(),
         conf.maxChunksBeingTransferred(), false /* syncModeEnabled */);
     }
+    // 构造请求消息处理器
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler, conf.maxChunksBeingTransferred(), chunkFetchRequestHandler);
+    // 构造 Channel 处理器，将消息委托给 TransportResponseHandler 和 TransportRequestHandler 进行处理
     return new TransportChannelHandler(client, responseHandler, requestHandler,
       conf.connectionTimeoutMs(), separateChunkFetchRequest, closeIdleConnections, this);
   }

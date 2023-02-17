@@ -52,16 +52,19 @@ private[netty] class NettyRpcEnv(
     if (id == SparkContext.DRIVER_IDENTIFIER) "driver" else "executor"
   }
 
+  // 创建传输配置对象
   private[netty] val transportConf = SparkTransportConf.fromSparkConf(
     conf.clone.set(RPC_IO_NUM_CONNECTIONS_PER_PEER, 1),
     "rpc",
     conf.get(RPC_IO_THREADS).getOrElse(numUsableCores),
     role)
 
+  // 创建消息调度器
   private val dispatcher: Dispatcher = new Dispatcher(this, numUsableCores)
 
   private val streamManager = new NettyStreamManager(this)
 
+  // 创建传输上下文
   private val transportContext = new TransportContext(transportConf,
     new NettyRpcHandler(dispatcher, this, streamManager))
 
@@ -84,10 +87,12 @@ private[netty] class NettyRpcEnv(
    * It also allows for different configuration of certain properties, such as the number of
    * connections per peer.
    */
-  @volatile private var fileDownloadFactory: TransportClientFactory = _
+  @volatile private var fileDownloadFactory: TransportClientFactory = _ // 用于文件下载
 
+  // 处理请求超时的 Scheduler
   val timeoutScheduler = ThreadUtils.newDaemonSingleThreadScheduledExecutor("netty-rpc-env-timeout")
 
+  // 异步处理 TransportClientFactory#createClient 的线程池
   // Because TransportClientFactory.createClient is blocking, we need to run it in this thread pool
   // to implement non-blocking send/ask.
   // TODO: a non-blocking TransportClientFactory.createClient in future
@@ -104,6 +109,7 @@ private[netty] class NettyRpcEnv(
    * we just put messages to its [[Outbox]] to implement a non-blocking `send` method.
    */
   private val outboxes = new ConcurrentHashMap[RpcAddress, Outbox]()
+  // RpcAddress 与 Outbox 之间的映射关系，向远端发送的消息会先记录到对应的 Outbox 中，然后异步发送
 
   /**
    * Remove the address's Outbox and stop it.
@@ -116,12 +122,14 @@ private[netty] class NettyRpcEnv(
   }
 
   def startServer(bindAddress: String, port: Int): Unit = {
-    val bootstraps: java.util.List[TransportServerBootstrap] =
+    val bootstraps: java.util.List[TransportServerBootstrap] = {
       if (securityManager.isAuthenticationEnabled()) {
         java.util.Arrays.asList(new AuthServerBootstrap(transportConf, securityManager))
       } else {
         java.util.Collections.emptyList()
       }
+    }
+    // 创建并启动 RPC Server
     server = transportContext.createServer(bindAddress, port, bootstraps)
     dispatcher.registerRpcEndpoint(
       RpcEndpointVerifier.NAME, new RpcEndpointVerifier(this, dispatcher))
@@ -486,13 +494,14 @@ private[rpc] class NettyRpcEnvFactory extends RpcEnvFactory with Logging {
     val sparkConf = config.conf
     // Use JavaSerializerInstance in multiple threads is safe. However, if we plan to support
     // KryoSerializer in future, we have to use ThreadLocal to store SerializerInstance
-    val javaSerializerInstance =
+    val javaSerializerInstance = // 用于 RPC 传输对象序列化
       new JavaSerializer(sparkConf).newInstance().asInstanceOf[JavaSerializerInstance]
     val nettyEnv =
       new NettyRpcEnv(sparkConf, javaSerializerInstance, config.advertiseAddress,
         config.securityManager, config.numUsableCores)
     if (!config.clientMode) {
       val startNettyRpcEnv: Int => (NettyRpcEnv, Int) = { actualPort =>
+        // 对于非 client 模式，创建并启动 RPC Server
         nettyEnv.startServer(config.bindAddress, actualPort)
         (nettyEnv, nettyEnv.address.port)
       }
@@ -533,8 +542,10 @@ private[netty] class NettyRpcEndpointRef(
     private val endpointAddress: RpcEndpointAddress,
     @transient @volatile private var nettyEnv: NettyRpcEnv) extends RpcEndpointRef(conf) {
 
+  // 向远端发送请求的客户端
   @transient @volatile var client: TransportClient = _
 
+  // 远端 Endpoint 地址
   override def address: RpcAddress =
     if (endpointAddress.rpcAddress != null) endpointAddress.rpcAddress else null
 
@@ -548,6 +559,7 @@ private[netty] class NettyRpcEndpointRef(
     out.defaultWriteObject()
   }
 
+  // 远端 Endpoint 名称
   override def name: String = endpointAddress.name
 
   override def askAbortable[T: ClassTag](
@@ -692,10 +704,13 @@ private[netty] class NettyRpcHandler(
   }
 
   private def internalReceive(client: TransportClient, message: ByteBuffer): RequestMessage = {
+    // 获取远端请求地址
     val addr = client.getChannel().remoteAddress().asInstanceOf[InetSocketAddress]
     assert(addr != null)
     val clientAddr = RpcAddress(addr.getHostString, addr.getPort)
+    // 反序列化请求消息
     val requestMessage = RequestMessage(nettyEnv, client, message)
+    // 消息中不包含发送者的地址信息，则重新构造一个
     if (requestMessage.senderAddress == null) {
       // Create a new message with the socket address of the client as the sender.
       new RequestMessage(clientAddr, requestMessage.receiver, requestMessage.content)

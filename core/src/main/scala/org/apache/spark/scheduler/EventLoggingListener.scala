@@ -94,7 +94,11 @@ private[spark] class EventLoggingListener(
     }
   }
 
-  /** Log the event as JSON. */
+  /**
+   * Log the event as JSON.
+   *
+   * 将事件转换成 JSON 后写入日志文件
+   */
   private def logEvent(event: SparkListenerEvent, flushLogger: Boolean = false): Unit = {
     val eventJson = JsonProtocol.sparkEventToJson(event)
     logWriter.writeEvent(compact(render(eventJson)), flushLogger)

@@ -27,10 +27,10 @@ import javax.annotation.concurrent.GuardedBy
  *             to `Object` to avoid programming errors, since this object should only be used for
  *             synchronization purposes.
  */
-private[memory] abstract class MemoryPool(lock: Object) {
+private[memory] abstract class MemoryPool(lock: Object /* 锁对象 */) {
 
   @GuardedBy("lock")
-  private[this] var _poolSize: Long = 0
+  private[this] var _poolSize: Long = 0 // 内存池的大小（单位为字节）
 
   /**
    * Returns the current size of the pool, in bytes.
@@ -41,6 +41,8 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Returns the amount of free memory in the pool, in bytes.
+   *
+   * 获取内存池的空闲空间
    */
   final def memoryFree: Long = lock.synchronized {
     _poolSize - memoryUsed
@@ -48,6 +50,8 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Expands the pool by `delta` bytes.
+   *
+   * 给内存池扩展delta给定的大小（单位为字节）
    */
   final def incrementPoolSize(delta: Long): Unit = lock.synchronized {
     require(delta >= 0)
@@ -56,6 +60,8 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Shrinks the pool by `delta` bytes.
+   *
+   * 将内存池缩小delta给定的大小（单位为字节）
    */
   final def decrementPoolSize(delta: Long): Unit = lock.synchronized {
     require(delta >= 0)

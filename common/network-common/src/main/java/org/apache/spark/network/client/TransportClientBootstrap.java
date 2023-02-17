@@ -29,6 +29,11 @@ import io.netty.channel.Channel;
  * the JVM itself.
  */
 public interface TransportClientBootstrap {
+
+  /*
+   * 客户端引导程序，当服务端响应客户端连接时在客户端执行一次的引导程序
+   */
+
   /** Performs the bootstrapping operation, throwing an exception on failure. */
   void doBootstrap(TransportClient client, Channel channel) throws RuntimeException;
 }

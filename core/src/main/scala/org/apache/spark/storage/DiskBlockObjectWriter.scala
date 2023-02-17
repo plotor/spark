@@ -37,6 +37,8 @@ import org.apache.spark.util.collection.PairsWriter
  *
  * This class does not support concurrent writes. Also, once the writer has been opened it cannot be
  * reopened again.
+ *
+ * 将在Shuffle阶段将map任务的输出写入磁盘，这样reduce任务就能够从磁盘中获取map任务的中间输出了
  */
 private[spark] class DiskBlockObjectWriter(
     val file: File,

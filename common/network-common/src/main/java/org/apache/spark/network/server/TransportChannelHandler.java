@@ -51,6 +51,12 @@ import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
  * timeout if the client is continuously sending but getting no responses, for simplicity.
  */
 public class TransportChannelHandler extends SimpleChannelInboundHandler<Message> {
+
+  /*
+   * - 在服务端代理 TransportRequestHandler 对请求消息进行处理
+   * - 在客户端代理 TransportResponseHandler 对响应消息进行处理
+   */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportChannelHandler.class);
 
   private final TransportClient client;
@@ -137,8 +143,10 @@ public class TransportChannelHandler extends SimpleChannelInboundHandler<Message
   @Override
   public void channelRead0(ChannelHandlerContext ctx, Message request) throws Exception {
     if (request instanceof RequestMessage) {
+      // 使用 TransportRequestHandler 处理 request
       requestHandler.handle((RequestMessage) request);
     } else if (request instanceof ResponseMessage) {
+      // 使用 TransportResponseHandler 处理 response
       responseHandler.handle((ResponseMessage) request);
     } else {
       ctx.fireChannelRead(request);

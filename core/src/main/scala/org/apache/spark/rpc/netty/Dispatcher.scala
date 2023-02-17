@@ -37,8 +37,13 @@ import org.apache.spark.rpc._
  */
 private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) extends Logging {
 
+  /* 消息调度器，负责将消息路由到处理此消息 RpcEndpoint */
+
+  // Endpoint 名称与对应 MessageLoop 之间的映射
   private val endpoints: ConcurrentMap[String, MessageLoop] =
     new ConcurrentHashMap[String, MessageLoop]
+
+  // Endpoint 与 Ref 之间的映射
   private val endpointRefs: ConcurrentMap[RpcEndpoint, RpcEndpointRef] =
     new ConcurrentHashMap[RpcEndpoint, RpcEndpointRef]
 
@@ -84,6 +89,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
           throw e
       }
     }
+    // 返回 ref
     endpointRef
   }
 
@@ -108,6 +114,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
         // This endpoint will be stopped by Dispatcher.stop() method.
         return
       }
+      // 注销对应的 endpoint
       unregisterRpcEndpoint(rpcEndpointRef.name)
     }
   }
@@ -162,8 +169,10 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
   /**
    * Posts a message to a specific endpoint.
    *
-   * @param endpointName name of the endpoint.
-   * @param message the message to post
+   * 将消息发送给指定的 endpoint
+   *
+   * @param endpointName      name of the endpoint.
+   * @param message           the message to post
    * @param callbackIfStopped callback function if the endpoint is stopped.
    */
   private def postMessage(
@@ -171,12 +180,14 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       message: InboxMessage,
       callbackIfStopped: (Exception) => Unit): Unit = {
     val error = synchronized {
+      // 依据 endpoint 名称获取对应的 MessageLoop
       val loop = endpoints.get(endpointName)
       if (stopped) {
         Some(new RpcEnvStoppedException())
       } else if (loop == null) {
         Some(new SparkException(s"Could not find $endpointName."))
       } else {
+        // 将消息加入 Inbox 中
         loop.post(endpointName, message)
         None
       }
@@ -194,6 +205,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
     }
     var stopSharedLoop = false
     endpoints.asScala.foreach { case (name, loop) =>
+      // 遍历按照名称注销所有的 endpoint
       unregisterRpcEndpoint(name)
       if (!loop.isInstanceOf[SharedMessageLoop]) {
         loop.stop()

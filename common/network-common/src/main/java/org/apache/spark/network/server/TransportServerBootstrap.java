@@ -25,6 +25,11 @@ import io.netty.channel.Channel;
  * authentication.
  */
 public interface TransportServerBootstrap {
+
+  /*
+   * 服务端引导程序，当客户端连接到服务端时在服务端执行一次的引导程序。
+   */
+
   /**
    * Customizes the channel to include new features, if needed.
    *

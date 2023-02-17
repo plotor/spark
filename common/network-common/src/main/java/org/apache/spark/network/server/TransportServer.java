@@ -17,11 +17,6 @@
 
 package org.apache.spark.network.server;
 
-import java.io.Closeable;
-import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricSet;
 import com.google.common.base.Preconditions;
@@ -34,21 +29,36 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import org.apache.commons.lang3.SystemUtils;
+import org.apache.spark.network.TransportContext;
+import org.apache.spark.network.util.IOMode;
+import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.NettyMemoryMetrics;
+import org.apache.spark.network.util.NettyUtils;
+import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.TransportContext;
-import org.apache.spark.network.util.*;
+import java.io.Closeable;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Server for the efficient, low-level streaming service.
  */
 public class TransportServer implements Closeable {
+
+    /*
+     * RPC 服务端实现，处理来自 TransportClient 发送的消息。
+     */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportServer.class);
 
   private final TransportContext context;
   private final TransportConf conf;
+  // RPC 请求处理器
   private final RpcHandler appRpcHandler;
+  // 服务端引导程序列表
   private final List<TransportServerBootstrap> bootstraps;
 
   private ServerBootstrap bootstrap;
@@ -81,6 +91,7 @@ public class TransportServer implements Closeable {
 
     boolean shouldClose = true;
     try {
+      // 初始化
       init(hostToBind, portToBind);
       shouldClose = false;
     } finally {
@@ -131,12 +142,14 @@ public class TransportServer implements Closeable {
       bootstrap.childOption(ChannelOption.SO_KEEPALIVE, true);
     }
 
+    // 设置 Channel 初始化函数
     bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
       @Override
       protected void initChannel(SocketChannel ch) {
         logger.debug("New connection accepted for remote address {}.", ch.remoteAddress());
 
         RpcHandler rpcHandler = appRpcHandler;
+        // 遍历应用服务端引导程序
         for (TransportServerBootstrap bootstrap : bootstraps) {
           rpcHandler = bootstrap.doBootstrap(ch, rpcHandler);
         }
@@ -144,6 +157,7 @@ public class TransportServer implements Closeable {
       }
     });
 
+    // 启动 Server
     InetSocketAddress address = hostToBind == null ?
         new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, portToBind);
     channelFuture = bootstrap.bind(address);
