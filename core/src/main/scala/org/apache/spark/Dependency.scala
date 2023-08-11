@@ -73,28 +73,31 @@ abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
 @DeveloperApi
 class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
     @transient private val _rdd: RDD[_ <: Product2[K, V]],
-    val partitioner: Partitioner,
+    val partitioner: Partitioner, // 分区计算器
     val serializer: Serializer = SparkEnv.get.serializer,
-    val keyOrdering: Option[Ordering[K]] = None,
-    val aggregator: Option[Aggregator[K, V, C]] = None,
-    val mapSideCombine: Boolean = false,
+    val keyOrdering: Option[Ordering[K]] = None, //
+    val aggregator: Option[Aggregator[K, V, C]] = None, // 聚合 map 任务输出数据的聚合器
+    val mapSideCombine: Boolean = false, // 是否在 map 端进行合并
     val shuffleWriterProcessor: ShuffleWriteProcessor = new ShuffleWriteProcessor)
   extends Dependency[Product2[K, V]] with Logging {
 
   if (mapSideCombine) {
     require(aggregator.isDefined, "Map-side combine without Aggregator specified!")
   }
+
+  // RDD 必须是 Product2[K, V] 类型
   override def rdd: RDD[Product2[K, V]] = _rdd.asInstanceOf[RDD[Product2[K, V]]]
 
-  private[spark] val keyClassName: String = reflect.classTag[K].runtimeClass.getName
-  private[spark] val valueClassName: String = reflect.classTag[V].runtimeClass.getName
+  private[spark] val keyClassName: String = reflect.classTag[K].runtimeClass.getName // K 的类名
+  private[spark] val valueClassName: String = reflect.classTag[V].runtimeClass.getName // V 的类名
   // Note: It's possible that the combiner class tag is null, if the combineByKey
   // methods in PairRDDFunctions are used instead of combineByKeyWithClassTag.
   private[spark] val combinerClassName: Option[String] =
     Option(reflect.classTag[C]).map(_.runtimeClass.getName)
 
-  val shuffleId: Int = _rdd.context.newShuffleId()
+  val shuffleId: Int = _rdd.context.newShuffleId() // 当前 ShuffleDependency 标识
 
+  // 当前 ShuffleDependency 处理器
   val shuffleHandle: ShuffleHandle = _rdd.context.env.shuffleManager.registerShuffle(
     shuffleId, this)
 

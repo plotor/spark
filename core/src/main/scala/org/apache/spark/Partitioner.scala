@@ -38,8 +38,8 @@ import org.apache.spark.util.random.SamplingUtils
  * the same partition key.
  */
 abstract class Partitioner extends Serializable {
-  def numPartitions: Int
-  def getPartition(key: Any): Int
+  def numPartitions: Int // 获取分区数量
+  def getPartition(key: Any): Int // 获取 key 对应的分区 ID
 }
 
 object Partitioner {

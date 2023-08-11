@@ -24,21 +24,21 @@ import org.apache.spark.rdd.{DeterministicLevel, RDD, RDDOperationScope}
 import org.apache.spark.util.Utils
 
 @DeveloperApi
-class RDDInfo(
-    val id: Int,
-    var name: String,
-    val numPartitions: Int,
-    var storageLevel: StorageLevel,
+class RDDInfo( // 描述 RDD 的信息
+    val id: Int, // RDD ID
+    var name: String, // RDD 名称
+    val numPartitions: Int, // RDD 的分区数量
+    var storageLevel: StorageLevel, // RDD 的存储级别
     val isBarrier: Boolean,
-    val parentIds: Seq[Int],
-    val callSite: String = "",
+    val parentIds: Seq[Int], // 依赖的前置 RDD 的 ID 列表
+    val callSite: String = "", // RDD 的用户调用栈信息
     val scope: Option[RDDOperationScope] = None,
     val outputDeterministicLevel: DeterministicLevel.Value = DeterministicLevel.DETERMINATE)
   extends Ordered[RDDInfo] {
 
-  var numCachedPartitions = 0
-  var memSize = 0L
-  var diskSize = 0L
+  var numCachedPartitions = 0 // 缓存的分区数量
+  var memSize = 0L // 使用的内存大小
+  var diskSize = 0L // 使用的磁盘大小
 
   def isCached: Boolean = (memSize + diskSize > 0) && numCachedPartitions > 0
 
@@ -56,7 +56,8 @@ class RDDInfo(
 }
 
 private[spark] object RDDInfo {
-  def fromRdd(rdd: RDD[_]): RDDInfo = {
+
+  def fromRdd(rdd: RDD[_]): RDDInfo = { // 构造 RDD 对应的 RDDInfo 对象
     val rddName = Option(rdd.name).getOrElse(Utils.getFormattedClassName(rdd))
     val parentIds = rdd.dependencies.map(_.rdd.id)
     val callsiteLongForm = Option(SparkEnv.get)
