@@ -394,8 +394,8 @@ private[yarn] class YarnAllocator(
     updateResourceRequests()
 
     val progressIndicator = 0.1f
-    // Poll the ResourceManager. This doubles as a heartbeat if there are no pending container
-    // requests.
+    // Poll the ResourceManager. This doubles as a heartbeat if there are no pending container requests.
+    // 请求 YARN 分配 Container
     val allocateResponse = amClient.allocate(progressIndicator)
 
     val allocatedContainers = allocateResponse.getAllocatedContainers()
@@ -633,6 +633,7 @@ private[yarn] class YarnAllocator(
       }
     }
 
+    // 在容器上启动 Executor 进程
     runAllocatedContainers(containersToUse)
 
     logInfo("Received %d containers from YARN, launching executors on %d of them."
@@ -714,6 +715,7 @@ private[yarn] class YarnAllocator(
       if (rpRunningExecs < getOrUpdateTargetNumExecutorsForRPId(rpId)) {
         getOrUpdateNumExecutorsStartingForRPId(rpId).incrementAndGet()
         if (launchContainers) {
+          // 异步执行
           launcherPool.execute(() => {
             try {
               new ExecutorRunnable(

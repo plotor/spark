@@ -67,6 +67,7 @@ import org.apache.spark.util.Utils
  * }}}
  */
 object RowEncoder {
+
   def apply(schema: StructType, lenient: Boolean): ExpressionEncoder[Row] = {
     val cls = classOf[Row]
     val inputObject = BoundReference(0, ObjectType(cls), nullable = true)

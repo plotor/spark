@@ -237,14 +237,14 @@ object SparkEnv extends Logging {
    */
   private def create(
       conf: SparkConf,
-      executorId: String,
+      executorId: String, // 如果是 Driver 则为 "driver"
       bindAddress: String,
       advertiseAddress: String,
       port: Option[Int],
-      isLocal: Boolean,
+      isLocal: Boolean, // 是否是 local 运行模式
       numUsableCores: Int,
       ioEncryptionKey: Option[Array[Byte]],
-      listenerBus: LiveListenerBus = null,
+      listenerBus: LiveListenerBus = null, // 对于 Driver 而言，listenerBus 不应该为 null
       mockOutputCommitCoordinator: Option[OutputCommitCoordinator] = None): SparkEnv = {
 
     val isDriver = executorId == SparkContext.DRIVER_IDENTIFIER
@@ -266,15 +266,19 @@ object SparkEnv extends Logging {
       }
     }
 
+    // sparkDriver or sparkExecutor
     val systemName = if (isDriver) driverSystemName else executorSystemName
+    // 对于 Driver 采用 server 模式，对于 Executor 采用 client 模式
     val rpcEnv = RpcEnv.create(systemName, bindAddress, advertiseAddress, port.getOrElse(-1), conf,
       securityManager, numUsableCores, !isDriver)
 
     // Figure out which port RpcEnv actually bound to in case the original port is 0 or occupied.
     if (isDriver) {
       conf.set(DRIVER_PORT, rpcEnv.address.port)
+      logInfo(s"Driver rpc port is ${conf.get(DRIVER_PORT)}")
     }
 
+    // 创建序列化器
     val serializer = Utils.instantiateSerializerFromConf[Serializer](SERIALIZER, conf, isDriver)
     logDebug(s"Using serializer: ${serializer.getClass}")
 
@@ -282,19 +286,21 @@ object SparkEnv extends Logging {
 
     val closureSerializer = new JavaSerializer(conf)
 
-    def registerOrLookupEndpoint(
-        name: String, endpointCreator: => RpcEndpoint):
-      RpcEndpointRef = {
+    def registerOrLookupEndpoint(name: String, endpointCreator: => RpcEndpoint): RpcEndpointRef = {
       if (isDriver) {
         logInfo("Registering " + name)
+        // 如果是 Driver 则注册 MapOutputTrackerMasterEndpoint
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {
+        // 如果是 Executor，则获取 MapOutputTrackerMasterEndpoint 对应的 RPC 客户端
         RpcUtils.makeDriverRef(name, conf, rpcEnv)
       }
     }
 
+    // 创建 BroadcastManager
     val broadcastManager = new BroadcastManager(isDriver, conf)
 
+    // 创建 MapOutputTracker
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -303,20 +309,23 @@ object SparkEnv extends Logging {
 
     // Have to assign trackerEndpoint after initialization as MapOutputTrackerEndpoint
     // requires the MapOutputTracker itself
-    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,
+    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(
+      MapOutputTracker.ENDPOINT_NAME, // MapOutputTracker
       new MapOutputTrackerMasterEndpoint(
         rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf))
 
     // Let the user specify short names for shuffle managers
+    // 别名处理，用户可以指定 ShuffleManager 的全称类名，如果是 sort 或 tungsten-sort 则都用 SortShuffleManager
     val shortShuffleMgrNames = Map(
       "sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName,
       "tungsten-sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName)
     val shuffleMgrName = conf.get(config.SHUFFLE_MANAGER)
     val shuffleMgrClass =
       shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase(Locale.ROOT), shuffleMgrName)
-    val shuffleManager = Utils.instantiateSerializerOrShuffleManager[ShuffleManager](
-      shuffleMgrClass, conf, isDriver)
+    // 实例化 ShuffleManager，可以通过 spark.shuffle.manager 参数设置
+    val shuffleManager = Utils.instantiateSerializerOrShuffleManager[ShuffleManager](shuffleMgrClass, conf, isDriver)
 
+    // 创建 MemoryManager，使用统一内存管理器
     val memoryManager: MemoryManager = UnifiedMemoryManager(conf, numUsableCores)
 
     val blockManagerPort = if (isDriver) {
@@ -325,6 +334,7 @@ object SparkEnv extends Logging {
       conf.get(BLOCK_MANAGER_PORT)
     }
 
+    // 如果启用了 ESS，则创建对应的 Shuffle 客户端
     val externalShuffleClient = if (conf.get(config.SHUFFLE_SERVICE_ENABLED)) {
       val transConf = SparkTransportConf.fromSparkConf(conf, "shuffle", numUsableCores)
       Some(new ExternalBlockStoreClient(transConf, securityManager,
@@ -335,7 +345,13 @@ object SparkEnv extends Logging {
 
     // Mapping from block manager id to the block manager's information.
     val blockManagerInfo = new concurrent.TrieMap[BlockManagerId, BlockManagerInfo]()
+    // 创建 BlockManagerMaster
     val blockManagerMaster = new BlockManagerMaster(
+      /*
+       * 注册 BlockManagerMaster：
+       * - 对于 Driver 则启动 BlockManagerMasterEndpoint；
+       * - 对于 Executor 则获取其 RPC 客户端
+       */
       registerOrLookupEndpoint(
         BlockManagerMaster.DRIVER_ENDPOINT_NAME,
         new BlockManagerMasterEndpoint(
@@ -351,16 +367,23 @@ object SparkEnv extends Logging {
           mapOutputTracker.asInstanceOf[MapOutputTrackerMaster],
           shuffleManager,
           isDriver)),
+      /*
+       * 注册 BlockManagerMasterHeartbeat：
+       * - 对于 Driver 则启动 BlockManagerMasterHeartbeatEndpoint；
+       * - 对于 Executor 则获取其 RPC 客户端
+       */
       registerOrLookupEndpoint(
         BlockManagerMaster.DRIVER_HEARTBEAT_ENDPOINT_NAME,
         new BlockManagerMasterHeartbeatEndpoint(rpcEnv, isLocal, blockManagerInfo)),
       conf,
       isDriver)
 
+    // 创建 BlockTransferService，提供了可以被其他节点客户端访问的 Shuffle 服务
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
         blockManagerPort, numUsableCores, blockManagerMaster.driverEndpoint)
 
+    // 创建 BlockManager
     // NB: blockManager is not valid until initialize() is called later.
     val blockManager = new BlockManager(
       executorId,
@@ -390,6 +413,7 @@ object SparkEnv extends Logging {
       ms
     }
 
+    // 创建 OutputCommitCoordinator，已决定任务是否可以提交输出给 HDFS
     val outputCommitCoordinator = mockOutputCommitCoordinator.getOrElse {
       new OutputCommitCoordinator(conf, isDriver)
     }
@@ -397,6 +421,7 @@ object SparkEnv extends Logging {
       new OutputCommitCoordinatorEndpoint(rpcEnv, outputCommitCoordinator))
     outputCommitCoordinator.coordinatorRef = Some(outputCommitCoordinatorRef)
 
+    // 创建 SparkEnv
     val envInstance = new SparkEnv(
       executorId,
       rpcEnv,

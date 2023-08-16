@@ -78,6 +78,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
   private[spark] var scheduler: TaskScheduler = null
 
   // executor ID -> timestamp of when the last heartbeat from this executor was received
+  // 记录与对应 Executor 的会话时间
   private val executorLastSeen = new HashMap[String, Long]
 
   private val executorTimeoutMs = sc.conf.get(
@@ -128,6 +129,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
 
     // Messages received from executors
     case heartbeat @ Heartbeat(executorId, accumUpdates, blockManagerId, executorUpdates) =>
+      // 是否需要重新向 BlockManagerMaster 注册 BlockManager
       var reregisterBlockManager = !sc.isStopped
       if (scheduler != null) {
         if (executorLastSeen.contains(executorId)) {
@@ -202,7 +204,9 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
   private def expireDeadHosts(): Unit = {
     logTrace("Checking for hosts with no recent heartbeats in HeartbeatReceiver.")
     val now = clock.getTimeMillis()
+    // 遍历检查每个 Executor 最近一次的会话时间
     for ((executorId, lastSeenMs) <- executorLastSeen) {
+      // 如果距离上次会话已经超过默认 120s 则尝试移除对应的 Executor
       if (now - lastSeenMs > executorTimeoutMs) {
         logWarning(s"Removing executor $executorId with no recent heartbeats: " +
           s"${now - lastSeenMs} ms exceeds timeout $executorTimeoutMs ms")

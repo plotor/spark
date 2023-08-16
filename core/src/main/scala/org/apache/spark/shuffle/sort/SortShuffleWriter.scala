@@ -31,10 +31,12 @@ private[spark] class SortShuffleWriter[K, V, C](
     shuffleExecutorComponents: ShuffleExecutorComponents)
   extends ShuffleWriter[K, V] with Logging {
 
+  // 对应的 ShuffleDependency
   private val dep = handle.dependency
 
   private val blockManager = SparkEnv.get.blockManager
 
+  // 外部排序器
   private var sorter: ExternalSorter[K, V, _] = null
 
   // Are we in the process of stopping? Because map tasks can call stop() with success = true
@@ -50,7 +52,9 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
+    // 创建外部排序器
     sorter = if (dep.mapSideCombine) {
+      // 使用预聚合
       new ExternalSorter[K, V, C](
         context, dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
     } else {
@@ -60,13 +64,16 @@ private[spark] class SortShuffleWriter[K, V, C](
       new ExternalSorter[K, V, V](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
+    // 添加 map 任务的输出数据条目到排序器中
     sorter.insertAll(records)
 
     // Don't bother including the time to open the merged output file in the shuffle write time,
     // because it just opens a single file, so is typically too fast to measure accurately
     // (see SPARK-3570).
+    // 创建 ShuffleMapOutputWriter
     val mapOutputWriter = shuffleExecutorComponents.createMapOutputWriter(
       dep.shuffleId, mapId, dep.partitioner.numPartitions)
+    //
     sorter.writePartitionedMapOutput(dep.shuffleId, mapId, mapOutputWriter)
     partitionLengths = mapOutputWriter.commitAllPartitions(sorter.getChecksums).getPartitionLengths
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths, mapId)

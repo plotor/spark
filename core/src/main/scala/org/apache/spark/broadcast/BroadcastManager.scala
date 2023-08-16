@@ -41,7 +41,9 @@ private[spark] class BroadcastManager(
   private def initialize(): Unit = {
     synchronized {
       if (!initialized) {
+        // 创建 TorrentBroadcastFactory，基于 BT 协议的 BroadcastFactory 实现
         broadcastFactory = new TorrentBroadcastFactory
+        // 初始化方法目前是一个空实现
         broadcastFactory.initialize(isDriver, conf)
         initialized = true
       }
@@ -52,6 +54,7 @@ private[spark] class BroadcastManager(
     broadcastFactory.stop()
   }
 
+  // Broadcast ID 生成器
   private val nextBroadcastId = new AtomicLong(0)
 
   private[broadcast] val cachedValues =
@@ -61,6 +64,7 @@ private[spark] class BroadcastManager(
     )
 
   def newBroadcast[T: ClassTag](value_ : T, isLocal: Boolean): Broadcast[T] = {
+    // 生成 Broadcast ID
     val bid = nextBroadcastId.getAndIncrement()
     value_ match {
       case pb: PythonBroadcast =>
@@ -72,6 +76,7 @@ private[spark] class BroadcastManager(
 
       case _ => // do nothing
     }
+    // 委托 BroadcastFactory 执行
     broadcastFactory.newBroadcast[T](value_, isLocal, bid)
   }
 

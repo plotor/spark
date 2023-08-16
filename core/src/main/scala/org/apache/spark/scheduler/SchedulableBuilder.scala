@@ -37,6 +37,10 @@ import org.apache.spark.util.Utils
  * addTaskSetManager: build the leaf nodes(TaskSetManagers)
  */
 private[spark] trait SchedulableBuilder {
+
+  /**
+   * 返回根调度池
+   */
   def rootPool: Pool
 
   def buildPools(): Unit

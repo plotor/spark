@@ -55,8 +55,11 @@ private[spark] trait ExecutorAllocationClient {
    * @return whether the request is acknowledged by the cluster manager.
    */
   private[spark] def requestTotalExecutors(
+      // 每个 ResourceProfile 期望的 Executor 数目: [rpId, count(Executor)]
       resourceProfileIdToNumExecutors: Map[Int, Int],
+      // 每个 ResourceProfile 在本地的 Task 数目: [rpId, count(Locality Task)]
       numLocalityAwareTasksPerResourceProfileId: Map[Int, Int],
+      // 每个 ResourceProfile 对应在各个 host 上的 Task 数目: [rpId, [host, count(Task)]]
       hostToLocalTaskCount: Map[Int, Map[String, Int]]): Boolean
 
   /**

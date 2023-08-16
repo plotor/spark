@@ -55,13 +55,16 @@ private[yarn] class ExecutorRunnable(
     resourceProfileId: Int) extends Logging {
 
   var rpc: YarnRPC = YarnRPC.create(conf)
+  // YARN NodeManager 客户端
   var nmClient: NMClient = _
 
   def run(): Unit = {
     logDebug("Starting Executor Container")
+    // 创建、初始化并启动 YARN NM 客户端
     nmClient = NMClient.createNMClient()
     nmClient.init(conf)
     nmClient.start()
+    // 启动 Container 运行 Executor
     startContainer()
   }
 
@@ -95,6 +98,7 @@ private[yarn] class ExecutorRunnable(
     credentials.writeTokenStorageToStream(dob)
     ctx.setTokens(ByteBuffer.wrap(dob.getData()))
 
+    // 构造 Executor 启动指令
     val commands = prepareCommand()
 
     ctx.setCommands(commands.asJava)
@@ -121,6 +125,7 @@ private[yarn] class ExecutorRunnable(
 
     // Send the start request to the ContainerManager
     try {
+      // 启动 YARN Container
       nmClient.startContainer(container.get, ctx)
     } catch {
       case ex: Exception =>

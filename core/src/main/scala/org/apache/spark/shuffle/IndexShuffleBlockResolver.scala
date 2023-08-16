@@ -45,6 +45,7 @@ import org.apache.spark.util.Utils
  * We use the name of the shuffle data's shuffleBlockId with reduce ID set to 0 and add ".data"
  * as the filename postfix for data file, and ".index" as the filename postfix for index file.
  *
+ * 用于创建和维护 Shuffle Block 与物理文件位置之间的映射关系
  */
 // Note: Changes to the format in this file should be kept in sync with
 // org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getSortBasedShuffleBlockData().
@@ -94,6 +95,8 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
    * read from the specified directories.
+   *
+   * 获取 Shuffle 数据文件
    */
    def getDataFile(shuffleId: Int, mapId: Long, dirs: Option[Array[String]]): File = {
     val blockId = ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID)
@@ -108,6 +111,8 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
    * read from the specified directories.
+   *
+   * 获取 Shuffle 索引文件
    */
   def getIndexFile(
       shuffleId: Int,
@@ -152,6 +157,8 @@ private[spark] class IndexShuffleBlockResolver(
 
   /**
    * Remove data file and index file that contain the output data from one map.
+   *
+   * 删除Shuffle过程中包含指定map任务输出数据的Shuffle数据文件、索引文件，以及 checksum 文件
    */
   def removeDataByMap(shuffleId: Int, mapId: Long): Unit = {
     var file = getDataFile(shuffleId, mapId)
@@ -558,6 +565,9 @@ private[spark] class IndexShuffleBlockResolver(
       .getOrElse(blockManager.diskBlockManager.getFile(fileName))
   }
 
+  /**
+   * 获取指定 ShuffleBlockId 对应的数据
+   */
   override def getBlockData(
       blockId: BlockId,
       dirs: Option[Array[String]]): ManagedBuffer = {

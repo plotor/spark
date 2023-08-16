@@ -31,6 +31,10 @@ import org.apache.spark.sql.types.{DataType, IntegerType}
  * Distribution here refers to inter-node partitioning of data. That is, it describes how tuples
  * are partitioned across physical machines in a cluster. Knowing this property allows some
  * operators (e.g., Aggregate) to perform partition local operations instead of global ones.
+ *
+ * Distribution可以用来描述以下两种不同粒度的数据特征：
+ * 1. 节点间分区信息，即数据元组在集群不同的物理节点上是如何分区的。这个特性可以用来判断某些算子（例如Aggregate）能否进行局部计算(Partialoperation)，避免全局操作的代价。
+ * 2. 分区数据内排序信息，即单个分区内数据是如何分布的。
  */
 sealed trait Distribution {
   /**
@@ -194,7 +198,7 @@ case class BroadcastDistribution(mode: BroadcastMode) extends Distribution {
  */
 trait Partitioning {
   /** Returns the number of partitions that the data is split across */
-  val numPartitions: Int
+  val numPartitions: Int // 输出 RDD 的分区数
 
   /**
    * Returns true iff the guarantees made by this [[Partitioning]] are sufficient
@@ -204,6 +208,8 @@ trait Partitioning {
    *
    * A [[Partitioning]] can never satisfy a [[Distribution]] if its `numPartitions` doesn't match
    * [[Distribution.requiredNumPartitions]].
+   *
+   * 当前的Partitioning操作能否得到所需的数据分布，如果不满足一般需要进行repartition操作对数据进行重新组织
    */
   final def satisfies(required: Distribution): Boolean = {
     required.requiredNumPartitions.forall(_ == numPartitions) && satisfies0(required)

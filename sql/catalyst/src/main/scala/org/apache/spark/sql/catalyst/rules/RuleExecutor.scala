@@ -127,6 +127,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
 
     /** The key of SQLConf setting to tune maxIterations */
     def maxIterationsSetting: String = null
+
   }
 
   /** A strategy that is run once and idempotent. */
@@ -197,6 +198,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
         this.getClass.getName.stripSuffix("$"))
     }
 
+    // 遍历应用规则
     batches.foreach { batch =>
       val batchStartPlan = curPlan
       var iteration = 1
@@ -205,11 +207,14 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
 
       // Run until fix point (or the max number of iterations as specified in the strategy.
       while (continue) {
+        // 从左往右遍历 rules，并将每个 rule 处理后的 plan 作为参数传递给下一次 rule 进行处理
         curPlan = batch.rules.foldLeft(curPlan) {
           case (plan, rule) =>
             val startTime = System.nanoTime()
+            // 应用规则
             val result = rule(plan)
             val runTime = System.nanoTime() - startTime
+            // 判断规则是否改变了 plan
             val effective = !result.fastEquals(plan)
 
             if (effective) {
@@ -232,6 +237,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
             result
         }
         iteration += 1
+        // 迭代次数达到上限
         if (iteration > batch.strategy.maxIterations) {
           // Only log if this is a rule that is supposed to run more than once.
           if (iteration != 2) {

@@ -78,49 +78,49 @@ abstract class Optimizer(catalogManager: CatalogManager)
   def defaultBatches: Seq[Batch] = {
     val operatorOptimizationRuleSet =
       Seq(
-        // Operator push down
-        PushProjectionThroughUnion,
-        ReorderJoin,
-        EliminateOuterJoin,
-        PushDownPredicates,
+        // 算子下推
+        PushProjectionThroughUnion, // 列裁剪下推
+        ReorderJoin, // Join Reorder
+        EliminateOuterJoin, // OuterJoin 消除
+        PushDownPredicates, // 谓词下推
         PushDownLeftSemiAntiJoin,
         PushLeftSemiLeftAntiThroughJoin,
-        LimitPushDown,
+        LimitPushDown, // Limit 下推
         LimitPushDownThroughWindow,
-        ColumnPruning,
+        ColumnPruning, // 列裁剪
         GenerateOptimization,
         // Operator combine
-        CollapseRepartition,
-        CollapseProject,
-        OptimizeWindowFunctions,
-        CollapseWindow,
-        CombineFilters,
+        CollapseRepartition, // 重分区组合
+        CollapseProject, // 投影算子组合
+        OptimizeWindowFunctions, //
+        CollapseWindow, // Windiow 组合
+        CombineFilters, // 过滤条件组合
         EliminateLimits,
-        CombineUnions,
+        CombineUnions, // Union 算子组合
         // Constant folding and strength reduction
         OptimizeRepartition,
         TransposeWindow,
-        NullPropagation,
+        NullPropagation, // Null 提取
         NullDownPropagation,
         ConstantPropagation,
-        FoldablePropagation,
-        OptimizeIn,
-        ConstantFolding,
+        FoldablePropagation, // 可折叠算子提取
+        OptimizeIn, // In 操作优化
+        ConstantFolding, // 常数折叠
         EliminateAggregateFilter,
-        ReorderAssociativeOperator,
-        LikeSimplification,
-        BooleanSimplification,
-        SimplifyConditionals,
+        ReorderAssociativeOperator, // 重排序关联算子优化
+        LikeSimplification, // Like 算子简化
+        BooleanSimplification, // Boolean 算子简化
+        SimplifyConditionals, // 条件优化
         PushFoldableIntoBranches,
-        RemoveDispensableExpressions,
-        SimplifyBinaryComparison,
+        RemoveDispensableExpressions, // Dispensable 表达式消除
+        SimplifyBinaryComparison, // 比较算子简化
         ReplaceNullWithFalseInPredicate,
-        PruneFilters,
-        SimplifyCasts,
-        SimplifyCaseConversionExpressions,
-        RewriteCorrelatedScalarSubquery,
+        PruneFilters, // 过滤条件裁剪
+        SimplifyCasts, // Cast 算子简化
+        SimplifyCaseConversionExpressions, // case 表达式简化
+        RewriteCorrelatedScalarSubquery, // 依赖子查询重写
         RewriteLateralSubquery,
-        EliminateSerialization,
+        EliminateSerialization, // 序列化消除
         RemoveRedundantAliases,
         RemoveRedundantAggregates,
         UnwrapCastInBinaryComparison,
@@ -137,6 +137,7 @@ abstract class Optimizer(catalogManager: CatalogManager)
         operatorOptimizationRuleSet: _*) ::
       Batch("Infer Filters", Once,
         InferFiltersFromGenerate,
+        // 约束条件提取
         InferFiltersFromConstraints) ::
       Batch("Operator Optimization after Inferring Filters", fixedPoint,
         operatorOptimizationRuleSet: _*) ::
@@ -161,6 +162,7 @@ abstract class Optimizer(catalogManager: CatalogManager)
       InlineCTE()) ::
     Batch("Union", Once,
       RemoveNoopOperators,
+      // 将相邻的 Union 算子合并为一个 Union 节点
       CombineUnions,
       RemoveNoopUnion) ::
     Batch("OptimizeLimitZero", Once,
@@ -182,15 +184,20 @@ abstract class Optimizer(catalogManager: CatalogManager)
     // Subquery batch applies the optimizer rules recursively. Therefore, it makes no sense
     // to enforce idempotence on it and we change this batch from Once to FixedPoint(1).
     Batch("Subquery", FixedPoint(1),
+      // 对于子查询，进一步递归应用 Optimizer
       OptimizeSubqueries) ::
+    // 执行算子替换
     Batch("Replace Operators", fixedPoint,
       RewriteExceptAll,
       RewriteIntersectAll,
+      // 将 Intersect 算子替换成 LeftSemiJoin 算子
       ReplaceIntersectWithSemiJoin,
       ReplaceExceptWithFilter,
+      // 将 Except 算子替换成 LeftAntiJoin
       ReplaceExceptWithAntiJoin,
       ReplaceDistinctWithAggregate,
       ReplaceDeduplicateWithAggregate) ::
+    // 处理 Aggregate 算子中的逻辑
     Batch("Aggregate", fixedPoint,
       RemoveLiteralFromGroupExpressions,
       RemoveRepetitionFromGroupExpressions) :: Nil ++
@@ -209,8 +216,10 @@ abstract class Optimizer(catalogManager: CatalogManager)
     Batch("Join Reorder", FixedPoint(1),
       CostBasedJoinReorder) :+
     Batch("Eliminate Sorts", Once,
+      // 排序算子消除
       EliminateSorts) :+
     Batch("Decimal Optimizations", fixedPoint,
+      // 用于处理聚合操作中与Decimal类型相关的问题
       DecimalAggregates) :+
     // This batch must run after "Decimal Optimizations", as that one may change the
     // aggregate distinct column
@@ -218,11 +227,13 @@ abstract class Optimizer(catalogManager: CatalogManager)
       RewriteDistinctAggregates) :+
     Batch("Object Expressions Optimization", fixedPoint,
       EliminateMapObjects,
+      // 对特定条件下的过滤条件进行合并
       CombineTypedFilters,
       ObjectSerializerPruning,
       ReassignLambdaVariableID) :+
     Batch("LocalRelation", fixedPoint,
       ConvertToLocalRelation,
+      // 用于处理聚合操作中与Decimal类型相关的问题
       PropagateEmptyRelation,
       // PropagateEmptyRelation can change the nullability of an attribute from nullable to
       // non-nullable when an empty relation child of a Union is removed
@@ -230,11 +241,13 @@ abstract class Optimizer(catalogManager: CatalogManager)
     Batch("Optimize One Row Plan", fixedPoint, OptimizeOneRowPlan) :+
     // The following batch should be executed after batch "Join Reorder" and "LocalRelation".
     Batch("Check Cartesian Products", Once,
+      // 检查是否存在笛卡尔积 Join
       CheckCartesianProducts) :+
+    // 优化子查询
     Batch("RewriteSubquery", Once,
-      RewritePredicateSubquery,
-      ColumnPruning,
-      CollapseProject,
+      RewritePredicateSubquery, // 将特定的子查询谓词逻辑转换为 left-semi/antijoin 操作
+      ColumnPruning, // 列裁剪
+      CollapseProject, // 将两个相邻的Project算子组合在一起并执行别名替换，整合成一个统一的表达式
       RemoveRedundantAliases,
       RemoveNoopOperators) :+
     // This batch must be executed after the `RewriteSubquery` batch, which creates joins.
@@ -280,11 +293,14 @@ abstract class Optimizer(catalogManager: CatalogManager)
     // we do not eliminate subqueries or compute current time in the analyzer.
     private val rules = Seq(
       EliminateResolvedHint,
+      // 消除子查询别名，直接将 Subquery Aliases 替换成子节点
       EliminateSubqueryAliases,
       EliminateView,
+      // 表达式替换
       ReplaceExpressions,
       RewriteNonCorrelatedExists,
       PullOutGroupingExpressions,
+      // 计算时间表达式
       ComputeCurrentTime,
       ReplaceCurrentLike(catalogManager),
       SpecialDatetimeValues,
@@ -385,9 +401,11 @@ abstract class Optimizer(catalogManager: CatalogManager)
    * if necessary, instead of this method.
    */
   final override def batches: Seq[Batch] = {
+    // 对应 spark.sql.optimizer.excludedRules 配置，用于禁用一些优化规则
     val excludedRulesConf =
       SQLConf.get.optimizerExcludedRules.toSeq.flatMap(Utils.stringToSeq)
     val excludedRules = excludedRulesConf.filter { ruleName =>
+      // 移除一些不能被禁用的规则
       val nonExcludable = nonExcludableRules.contains(ruleName)
       if (nonExcludable) {
         logWarning(s"Optimization rule '${ruleName}' was not excluded from the optimizer " +

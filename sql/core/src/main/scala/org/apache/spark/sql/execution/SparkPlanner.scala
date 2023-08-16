@@ -30,21 +30,26 @@ class SparkPlanner(val session: SparkSession, val experimentalMethods: Experimen
 
   def numPartitions: Int = conf.numShufflePartitions
 
-  override def strategies: Seq[Strategy] =
+  override def strategies: Seq[Strategy] = {
+    // 一些实验性的策略
     experimentalMethods.extraStrategies ++
-      extraPlanningStrategies ++ (
-      LogicalQueryStageStrategy ::
-      PythonEvals ::
-      new DataSourceV2Strategy(session) ::
-      FileSourceStrategy ::
-      DataSourceStrategy ::
-      SpecialLimits ::
-      Aggregation ::
-      Window ::
-      JoinSelection ::
-      InMemoryScans ::
-      SparkScripts ::
-      BasicOperators :: Nil)
+      // 通过 spark.sql.extensions 自定义的一些规则
+      extraPlanningStrategies ++
+      (// 一系列内置的常规策略
+        LogicalQueryStageStrategy ::
+          PythonEvals ::
+          new DataSourceV2Strategy(session) ::
+          FileSourceStrategy ::
+          DataSourceStrategy ::
+          SpecialLimits ::
+          Aggregation ::
+          Window ::
+          JoinSelection ::
+          InMemoryScans ::
+          SparkScripts ::
+          BasicOperators :: Nil
+        )
+  }
 
   /**
    * Override to add extra planning strategies to the planner. These strategies are tried after

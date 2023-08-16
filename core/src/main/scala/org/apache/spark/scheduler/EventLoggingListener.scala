@@ -50,7 +50,7 @@ import org.apache.spark.util.{JsonProtocol, Utils}
 private[spark] class EventLoggingListener(
     appId: String,
     appAttemptId : Option[String],
-    logBaseDir: URI,
+    logBaseDir: URI, // 对应 spark.eventLog.dir 配置，默认为 /tmp/spark-events
     sparkConf: SparkConf,
     hadoopConf: Configuration)
   extends SparkListener with Logging {
@@ -62,6 +62,8 @@ private[spark] class EventLoggingListener(
       SparkHadoopUtil.get.newConfiguration(sparkConf))
 
   // For testing.
+  // 如果配置了 spark.eventLog.rolling.enabled=true 则使用 RollingEventLogFilesWriter
+  // 否则使用 SingleEventLogFileWriter
   private[scheduler] val logWriter: EventLogFileWriter =
     EventLogFileWriter(appId, appAttemptId, logBaseDir, sparkConf, hadoopConf)
 
@@ -80,7 +82,9 @@ private[spark] class EventLoggingListener(
    * Creates the log file in the configured log directory.
    */
   def start(): Unit = {
+    // 启动 EventLogFileWriter
     logWriter.start()
+    // 写一条 SparkListenerLogStart 日志
     initEventLog()
   }
 

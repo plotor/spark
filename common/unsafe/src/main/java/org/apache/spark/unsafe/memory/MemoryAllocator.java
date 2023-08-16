@@ -33,9 +33,14 @@ public interface MemoryAllocator {
   /**
    * Allocates a contiguous block of memory. Note that the allocated memory is not guaranteed
    * to be zeroed out (call `fill(0)` on the result if this is necessary).
+   *
+   * 分配指定大小的连续内存块
    */
   MemoryBlock allocate(long size) throws OutOfMemoryError;
 
+  /**
+   * 释放连续内存块
+   */
   void free(MemoryBlock memory);
 
   MemoryAllocator UNSAFE = new UnsafeMemoryAllocator();

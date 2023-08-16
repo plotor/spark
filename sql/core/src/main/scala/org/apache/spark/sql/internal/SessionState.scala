@@ -65,15 +65,15 @@ private[sql] class SessionState(
     sharedState: SharedState,
     val conf: SQLConf,
     val experimentalMethods: ExperimentalMethods,
-    val functionRegistry: FunctionRegistry,
+    val functionRegistry: FunctionRegistry, // 函数注册表
     val tableFunctionRegistry: TableFunctionRegistry,
-    val udfRegistration: UDFRegistration,
-    catalogBuilder: () => SessionCatalog,
-    val sqlParser: ParserInterface,
-    analyzerBuilder: () => Analyzer,
-    optimizerBuilder: () => Optimizer,
-    val planner: SparkPlanner,
-    val streamingQueryManagerBuilder: () => StreamingQueryManager,
+    val udfRegistration: UDFRegistration, // UDF 注册表
+    catalogBuilder: () => SessionCatalog, // 用于构造 SessionCatalog
+    val sqlParser: ParserInterface, // SQL Parser
+    analyzerBuilder: () => Analyzer, // 用于构造 LogicalPlan Analyzer
+    optimizerBuilder: () => Optimizer, // 用于构造 LogicalPlan Optimizer
+    val planner: SparkPlanner, // 用于将 Optimized LogicalPlan 转换成 Iterator[SparkPlan]
+    val streamingQueryManagerBuilder: () => StreamingQueryManager, // 用于构造 StreamingQuery 管理器
     val listenerManager: ExecutionListenerManager,
     resourceLoaderBuilder: () => SessionResourceLoader,
     createQueryExecution: (LogicalPlan, CommandExecutionMode.Value) => QueryExecution,
@@ -84,8 +84,10 @@ private[sql] class SessionState(
   // The following fields are lazy to avoid creating the Hive client when creating SessionState.
   lazy val catalog: SessionCatalog = catalogBuilder()
 
+  // 创建 Unresolved LogicalPlan Analyzer
   lazy val analyzer: Analyzer = analyzerBuilder()
 
+  // 创建 Analyzed LogicalPlan Optimizer
   lazy val optimizer: Optimizer = optimizerBuilder()
 
   lazy val resourceLoader: SessionResourceLoader = resourceLoaderBuilder()

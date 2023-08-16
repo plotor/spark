@@ -17,11 +17,6 @@
 
 package org.apache.spark.network.server;
 
-import java.io.Closeable;
-import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricSet;
 import com.google.common.base.Preconditions;
@@ -34,20 +29,34 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import org.apache.commons.lang3.SystemUtils;
+import org.apache.spark.network.TransportContext;
+import org.apache.spark.network.util.IOMode;
+import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.NettyMemoryMetrics;
+import org.apache.spark.network.util.NettyUtils;
+import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.TransportContext;
-import org.apache.spark.network.util.*;
+import java.io.Closeable;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Server for the efficient, low-level streaming service.
  */
 public class TransportServer implements Closeable {
+
+  /*
+   * RPC 服务端
+   */
+
   private static final Logger logger = LoggerFactory.getLogger(TransportServer.class);
 
   private final TransportContext context;
   private final TransportConf conf;
+  // RPC 请求处理器
   private final RpcHandler appRpcHandler;
   private final List<TransportServerBootstrap> bootstraps;
 

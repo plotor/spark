@@ -72,6 +72,7 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
             setActive(MessageLoop.PoisonPill)
             return
           }
+          logInfo(s"Process message in inbox for endpoint ${inbox.endpointName}")
           inbox.process(dispatcher)
         } catch {
           case NonFatal(e) => logError(e.getMessage, e)
@@ -79,14 +80,14 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
       }
     } catch {
       case _: InterruptedException => // exit
-        case t: Throwable =>
-          try {
-            // Re-submit a receive task so that message delivery will still work if
-            // UncaughtExceptionHandler decides to not kill JVM.
-            threadpool.execute(receiveLoopRunnable)
-          } finally {
-            throw t
-          }
+      case t: Throwable =>
+        try {
+          // Re-submit a receive task so that message delivery will still work if
+          // UncaughtExceptionHandler decides to not kill JVM.
+          threadpool.execute(receiveLoopRunnable)
+        } finally {
+          throw t
+        }
     }
   }
 }
@@ -100,9 +101,9 @@ private object MessageLoop {
  * A message loop that serves multiple RPC endpoints, using a shared thread pool.
  */
 private class SharedMessageLoop(
-    conf: SparkConf,
-    dispatcher: Dispatcher,
-    numUsableCores: Int)
+                                 conf: SparkConf,
+                                 dispatcher: Dispatcher,
+                                 numUsableCores: Int)
   extends MessageLoop(dispatcher) {
 
   private val endpoints = new ConcurrentHashMap[String, Inbox]()
@@ -157,9 +158,9 @@ private class SharedMessageLoop(
  * A message loop that is dedicated to a single RPC endpoint.
  */
 private class DedicatedMessageLoop(
-    name: String,
-    endpoint: IsolatedRpcEndpoint,
-    dispatcher: Dispatcher)
+                                    name: String,
+                                    endpoint: IsolatedRpcEndpoint,
+                                    dispatcher: Dispatcher)
   extends MessageLoop(dispatcher) {
 
   private val inbox = new Inbox(name, endpoint)

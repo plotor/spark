@@ -40,8 +40,8 @@ import org.apache.spark.util.collection.PairsWriter
  * This class does not support concurrent writes. Also, once the writer has been opened it cannot be
  * reopened again.
  */
-private[spark] class DiskBlockObjectWriter(
-    val file: File,
+private[spark] class DiskBlockObjectWriter( // 通过DiskBlockObjectWriter可以跳过对DiskStore的使用，直接将数据写入磁盘
+    val file: File, // 要写入的文件
     serializerManager: SerializerManager,
     serializerInstance: SerializerInstance,
     bufferSize: Int,

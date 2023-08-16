@@ -41,6 +41,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
       sc: SparkContext,
       masterURL: String,
       scheduler: TaskScheduler): SchedulerBackend = {
+    // spark.kubernetes.submitInDriver
     val wasSparkSubmittedInClusterMode = sc.conf.get(KUBERNETES_DRIVER_SUBMIT_CHECK)
     val (authConfPrefix,
       apiServerUri,
@@ -75,6 +76,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         KubernetesConf.getResourceNamePrefix(sc.conf.get("spark.app.name")))
     }
 
+    // 创建 Kubernetes 客户端，对应 KubernetesClient 实现
     val kubernetesClient = SparkKubernetesClientFactory.createKubernetesClient(
       apiServerUri,
       Some(sc.conf.get(KUBERNETES_NAMESPACE)),
@@ -84,6 +86,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
       defaultServiceAccountToken,
       defaultServiceAccountCaCrt)
 
+    // 加载 executor podTemplate 文件
     if (sc.conf.get(KUBERNETES_EXECUTOR_PODTEMPLATE_FILE).isDefined) {
       KubernetesUtils.loadPodFromTemplate(
         kubernetesClient,
@@ -97,6 +100,7 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
 
     ExecutorPodsSnapshot.setShouldCheckAllContainers(
       sc.conf.get(KUBERNETES_EXECUTOR_CHECK_ALL_CONTAINERS))
+    // Executor 对应的容器名称，默认为 spark-kubernetes-executor
     val sparkContainerName = sc.conf.get(KUBERNETES_EXECUTOR_PODTEMPLATE_CONTAINER_NAME)
       .getOrElse(DEFAULT_EXECUTOR_CONTAINER_NAME)
     ExecutorPodsSnapshot.setSparkContainerName(sparkContainerName)
@@ -105,11 +109,13 @@ private[spark] class KubernetesClusterManager extends ExternalClusterManager wit
         "kubernetes-executor-snapshots-subscribers", 2)
     val snapshotsStore = new ExecutorPodsSnapshotsStoreImpl(subscribersExecutor)
 
+    // 创建 ExecutorPodsLifecycleManager
     val executorPodsLifecycleEventHandler = new ExecutorPodsLifecycleManager(
       sc.conf,
       kubernetesClient,
       snapshotsStore)
 
+    // 创建 ExecutorPodsSnapshotsStore，区分 statefulset 和 direct
     val executorPodsAllocator = makeExecutorPodsAllocator(sc, kubernetesClient, snapshotsStore)
 
     val podsWatchEventSource = new ExecutorPodsWatchSnapshotSource(

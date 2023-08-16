@@ -30,16 +30,20 @@ import org.apache.spark.internal.Logging
 private[spark] class JobWaiter[T](
     dagScheduler: DAGScheduler,
     val jobId: Int,
-    totalTasks: Int,
-    resultHandler: (Int, T) => Unit)
+    totalTasks: Int, // 等待完成的 job 所包含的 Task 数量
+    resultHandler: (Int, T) => Unit) // 执行结果处理器
   extends JobListener with Logging {
 
+  // 已完成的任务数
   private val finishedTasks = new AtomicInteger(0)
   // If the job is finished, this will be its result. In the case of 0 task jobs (e.g. zero
   // partition RDDs), we set the jobResult directly to JobSucceeded.
   private val jobPromise: Promise[Unit] =
     if (totalTasks == 0) Promise.successful(()) else Promise()
 
+  /**
+   * Job 是否完成
+   */
   def jobFinished: Boolean = jobPromise.isCompleted
 
   def completionFuture: Future[Unit] = jobPromise.future
@@ -56,8 +60,10 @@ private[spark] class JobWaiter[T](
   override def taskSucceeded(index: Int, result: Any): Unit = {
     // resultHandler call must be synchronized in case resultHandler itself is not thread safe.
     synchronized {
+      // 调用 resultHandler 处理 Task 结果
       resultHandler(index, result.asInstanceOf[T])
     }
+    // 如果已经完成的任务数量等于总任务数，则标识 job 完成
     if (finishedTasks.incrementAndGet() == totalTasks) {
       jobPromise.success(())
     }

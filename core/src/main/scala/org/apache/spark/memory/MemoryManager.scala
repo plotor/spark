@@ -38,11 +38,16 @@ import org.apache.spark.util.Utils
  * In this context, execution memory refers to that used for computation in shuffles, joins,
  * sorts and aggregations, while storage memory refers to that used for caching and propagating
  * internal data across the cluster. There exists one MemoryManager per JVM.
+ *
+ * 每个 JVM 进程对应一个 MemoryManager
  */
 private[spark] abstract class MemoryManager(
     conf: SparkConf,
+    // CPU 核心数
     numCores: Int,
+    // 存储用的堆内存大小
     onHeapStorageMemory: Long,
+    // 计算用的堆内存大小
     onHeapExecutionMemory: Long) extends Logging {
 
   require(onHeapExecutionMemory > 0, "onHeapExecutionMemory must be > 0")
@@ -61,7 +66,9 @@ private[spark] abstract class MemoryManager(
   onHeapStorageMemoryPool.incrementPoolSize(onHeapStorageMemory)
   onHeapExecutionMemoryPool.incrementPoolSize(onHeapExecutionMemory)
 
+  // 堆外内存最大值，对应 spark.memory.offHeap.size 配置，默认为 0
   protected[this] val maxOffHeapMemory = conf.get(MEMORY_OFFHEAP_SIZE)
+  // 存储用的堆外内存最大值，默认为总堆外内存的一半
   protected[this] val offHeapStorageMemory =
     (maxOffHeapMemory * conf.get(MEMORY_STORAGE_FRACTION)).toLong
 
@@ -227,6 +234,8 @@ private[spark] abstract class MemoryManager(
   /**
    * Tracks whether Tungsten memory will be allocated on the JVM heap or off-heap using
    * sun.misc.Unsafe.
+   *
+   * 内存模式
    */
   final val tungstenMemoryMode: MemoryMode = {
     if (conf.get(MEMORY_OFFHEAP_ENABLED)) {
@@ -270,10 +279,13 @@ private[spark] abstract class MemoryManager(
     }
   }
 
+  // 默认 Page 大小
   val pageSizeBytes: Long = conf.get(BUFFER_PAGESIZE).getOrElse(defaultPageSizeBytes)
 
   /**
    * Allocates memory for use by Unsafe/Tungsten code.
+   *
+   * 内存分配器
    */
   private[memory] final val tungstenMemoryAllocator: MemoryAllocator = {
     tungstenMemoryMode match {

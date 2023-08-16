@@ -33,9 +33,9 @@ import org.apache.spark.network.shuffle.RemoteBlockPushResolver
  * If your BlockId should be serializable, be sure to add it to the BlockId.apply() method.
  */
 @DeveloperApi
-sealed abstract class BlockId {
+sealed abstract class BlockId { // 数据块 ID
   /** A globally unique identifier for this Block. Can be used for ser/de. */
-  def name: String
+  def name: String // 全局唯一标识
 
   // convenience methods
   def asRDDId: Option[RDDBlockId] = if (isRDD) Some(asInstanceOf[RDDBlockId]) else None

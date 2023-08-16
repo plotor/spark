@@ -34,6 +34,8 @@ import org.apache.spark.sql.errors.QueryExecutionErrors
  * The default constructor is private. User should use either [[MetadataBuilder]] or
  * `Metadata.fromJson()` to create Metadata instances.
  *
+ * 用于保存 StructField 的元数据信息
+ *
  * @param map an immutable map that stores the data
  *
  * @since 1.3.0

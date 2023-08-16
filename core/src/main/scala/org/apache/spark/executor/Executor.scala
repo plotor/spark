@@ -61,10 +61,10 @@ import org.apache.spark.util.io.ChunkedByteBuffer
  */
 private[spark] class Executor(
     executorId: String,
-    executorHostname: String,
+    executorHostname: String, // 所在主机名
     env: SparkEnv,
-    userClassPath: Seq[URL] = Nil,
-    isLocal: Boolean = false,
+    userClassPath: Seq[URL] = Nil, // 用户指定的 cp
+    isLocal: Boolean = false, // 是否是 local 模式
     uncaughtExceptionHandler: UncaughtExceptionHandler = new SparkUncaughtExceptionHandler,
     resources: immutable.Map[String, ResourceInformation])
   extends Logging {
@@ -77,8 +77,11 @@ private[spark] class Executor(
   )
   // Application dependencies (added through SparkContext) that we've fetched so far on this node.
   // Each map holds the master's timestamp for the version of that file or JAR we got.
+  // 当前 Task 执行所需要的文件，name -> timestamp
   private val currentFiles: HashMap[String, Long] = new HashMap[String, Long]()
+  // 当前 Task 执行所需要的 jar
   private val currentJars: HashMap[String, Long] = new HashMap[String, Long]()
+  // 当前 Task 执行所需要的归档文件（eg. tar.gz, zip）
   private val currentArchives: HashMap[String, Long] = new HashMap[String, Long]()
 
   private val EMPTY_BYTE_BUFFER = ByteBuffer.wrap(new Array[Byte](0))
@@ -116,6 +119,7 @@ private[spark] class Executor(
     .toLowerCase(Locale.ROOT).split(",").map(_.trim).filter(_.nonEmpty)
   private val executorSource = new ExecutorSource(threadPool, executorId, schemes)
   // Pool used for threads that supervise task killing / cancellation
+  // 监督 Task 的 kill 和取消
   private val taskReaperPool = ThreadUtils.newDaemonCachedThreadPool("Task reaper")
   // For tasks which are in the process of being killed, this map holds the most recently created
   // TaskReaper. All accesses to this map should be synchronized on the map itself (this isn't
@@ -124,6 +128,7 @@ private[spark] class Executor(
   // of a separate TaskReaper for every killTask() of a given task. Instead, this map allows us to
   // track whether an existing TaskReaper fulfills the role of a TaskReaper that we would otherwise
   // create. The map key is a task id.
+  // TaskId -> TaskReaper
   private val taskReaperForTask: HashMap[Long, TaskReaper] = HashMap[Long, TaskReaper]()
 
   val executorMetricsSource =
@@ -134,6 +139,7 @@ private[spark] class Executor(
     }
 
   if (!isLocal) {
+    // 初始化 BlockManager
     env.blockManager.initialize(conf.getAppId)
     env.metricsSystem.registerSource(executorSource)
     env.metricsSystem.registerSource(new JVMCPUSource())
@@ -165,6 +171,12 @@ private[spark] class Executor(
   // for fetching remote cached RDD blocks, so need to make sure it uses the right classloader too.
   env.serializerManager.setDefaultClassLoader(replClassLoader)
 
+  /*
+   * Task运行的结果如果超过maxResultSize，则会被删除。
+   * Task运行的结果如果小于等于maxResultSize且大于maxDirectResultSize，则会写入本地存储体系。
+   * Task运行的结果如果小于等于maxDirectResultSize，则会直接返回给Driver。
+   */
+
   // Max size of direct result. If task result is bigger than this, we use the block manager
   // to send the result back.
   private val maxDirectResultSize = Math.min(
@@ -174,6 +186,7 @@ private[spark] class Executor(
   private val maxResultSize = conf.get(MAX_RESULT_SIZE)
 
   // Maintains the list of running tasks.
+  // 记录正在运行的 Task, TaskId -> TaskRunner
   private[executor] val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
   // Kill mark TTL in milliseconds - 10 seconds.
@@ -217,6 +230,8 @@ private[spark] class Executor(
 
   /**
    * Interval to send heartbeats, in milliseconds
+   *
+   * 心跳间隔，默认 10s
    */
   private val HEARTBEAT_INTERVAL_MS = conf.get(EXECUTOR_HEARTBEAT_INTERVAL)
 
@@ -234,6 +249,7 @@ private[spark] class Executor(
     executorMetricsSource)
 
   // Executor for the heartbeat task.
+  // 心跳
   private val heartbeater = new Heartbeater(
     () => Executor.this.reportHeartBeat(),
     "executor-heartbeater",
@@ -246,6 +262,8 @@ private[spark] class Executor(
   /**
    * Count the failure times of heartbeat. It should only be accessed in the heartbeat thread. Each
    * successful heartbeat will reset it to 0.
+   *
+   * 心跳失败计数器
    */
   private var heartbeatFailures = 0
 
@@ -291,17 +309,21 @@ private[spark] class Executor(
   }
 
   private[executor] def createTaskRunner(context: ExecutorBackend,
-    taskDescription: TaskDescription) = new TaskRunner(context, taskDescription, plugins)
+                                         taskDescription: TaskDescription) =
+    new TaskRunner(context, taskDescription, plugins)
 
   def launchTask(context: ExecutorBackend, taskDescription: TaskDescription): Unit = {
     val taskId = taskDescription.taskId
+    // 封装 Task 为 Runnable 对象
     val tr = createTaskRunner(context, taskDescription)
     runningTasks.put(taskId, tr)
     val killMark = killMarks.get(taskId)
+    // 需要 Kill 掉当前 Task
     if (killMark != null) {
       tr.kill(killMark._1, killMark._2)
       killMarks.remove(taskId)
     }
+    // 异步执行 Task
     threadPool.execute(tr)
     if (decommissioned) {
       log.error(s"Launching a task while in decommissioned state.")
@@ -407,10 +429,12 @@ private[spark] class Executor(
     /** If specified, this task has been killed and this option contains the reason. */
     @volatile private var reasonIfKilled: Option[String] = None
 
+    // 线程 ID
     @volatile private var threadId: Long = -1
 
     def getThreadId: Long = threadId
 
+    // 是否已经完成
     /** Whether this task has been finished. */
     @GuardedBy("TaskRunner.this")
     private var finished = false
@@ -423,6 +447,8 @@ private[spark] class Executor(
     /**
      * The task to run. This will be set in run() by deserializing the task binary coming
      * from the driver. Once it is set, it will never be changed.
+     *
+     * 待运行的 Task
      */
     @volatile var task: Task[Any] = _
 
@@ -483,6 +509,7 @@ private[spark] class Executor(
       threadId = Thread.currentThread.getId
       Thread.currentThread.setName(threadName)
       val threadMXBean = ManagementFactory.getThreadMXBean
+      // 创建 Task 内存管理器 TaskMemoryManager
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
       val deserializeStartTimeNs = System.nanoTime()
       val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
@@ -491,9 +518,11 @@ private[spark] class Executor(
       Thread.currentThread.setContextClassLoader(replClassLoader)
       val ser = env.closureSerializer.newInstance()
       logInfo(s"Running $taskName")
+      // 更新 Task 状态为 RUNNING
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
       var taskStartTimeNs: Long = 0
       var taskStartCpu: Long = 0
+      // 计算 JVM 进程 GC 时间开销
       startGCTime = computeTotalGcTime()
       var taskStarted: Boolean = false
 
@@ -502,8 +531,10 @@ private[spark] class Executor(
         // requires access to properties contained within (e.g. for access control).
         Executor.taskDeserializationProps.set(taskDescription.properties)
 
+        // 下载缺失的 file, jar, 以及归档文件
         updateDependencies(
           taskDescription.addedFiles, taskDescription.addedJars, taskDescription.addedArchives)
+        // 反序列化得到 Task
         task = ser.deserialize[Task[Any]](
           taskDescription.serializedTask, Thread.currentThread.getContextClassLoader)
         task.localProperties = taskDescription.properties
@@ -539,6 +570,7 @@ private[spark] class Executor(
         } else 0L
         var threwException = true
         val value = Utils.tryWithSafeFinally {
+          // 执行 Task#run 方法
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = taskDescription.attemptNumber,
@@ -549,6 +581,8 @@ private[spark] class Executor(
           threwException = false
           res
         } {
+          /* 资源回收 */
+
           val releasedLocks = env.blockManager.releaseAllLocksForTask(taskId)
           val freedMemory = taskMemoryManager.cleanUpAllAllocatedMemory()
 
@@ -572,6 +606,7 @@ private[spark] class Executor(
             }
           }
         }
+
         task.context.fetchFailed.foreach { fetchFailure =>
           // uh-oh.  it appears the user code has caught the fetch-failure without throwing any
           // other exceptions.  Its *possible* this is what the user meant to do (though highly
@@ -590,6 +625,7 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerializationNs = System.nanoTime()
+        // 序列化执行结果
         val valueBytes = resultSer.serialize(value)
         val afterSerializationNs = System.nanoTime()
 
@@ -655,16 +691,20 @@ private[spark] class Executor(
         // TODO: do not serialize value twice
         val directResult = new DirectTaskResult(valueBytes, accumUpdates, metricPeaks)
         val serializedDirectResult = ser.serialize(directResult)
+        // 计算结果数据长度
         val resultSize = serializedDirectResult.limit()
 
         // directSend = sending directly back to the driver
         val serializedResult: ByteBuffer = {
+          // 结果大于允许的最大长度，丢弃
           if (maxResultSize > 0 && resultSize > maxResultSize) {
             logWarning(s"Finished $taskName. Result is larger than maxResultSize " +
               s"(${Utils.bytesToString(resultSize)} > ${Utils.bytesToString(maxResultSize)}), " +
               s"dropping it.")
             ser.serialize(new IndirectTaskResult[Any](TaskResultBlockId(taskId), resultSize))
-          } else if (resultSize > maxDirectResultSize) {
+          }
+          // 结果大于 maxDirectResultSize，写入 BlockManager
+          else if (resultSize > maxDirectResultSize) {
             val blockId = TaskResultBlockId(taskId)
             env.blockManager.putBytes(
               blockId,
@@ -672,7 +712,9 @@ private[spark] class Executor(
               StorageLevel.MEMORY_AND_DISK_SER)
             logInfo(s"Finished $taskName. $resultSize bytes result sent via BlockManager)")
             ser.serialize(new IndirectTaskResult[Any](blockId, resultSize))
-          } else {
+          }
+          // 直接将结果发回给 Driver
+          else {
             logInfo(s"Finished $taskName. $resultSize bytes result sent to driver")
             serializedDirectResult
           }
@@ -680,7 +722,9 @@ private[spark] class Executor(
 
         executorSource.SUCCEEDED_TASKS.inc(1L)
         setTaskFinishedAndClearInterruptStatus()
+        // 回调 Plugin 的 onTaskSucceeded
         plugins.foreach(_.onTaskSucceeded())
+        // 更新 Task 状态为 FINISHED，并将结果发送给 Driver
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
       } catch {
         case t: TaskKilledException =>
@@ -779,7 +823,7 @@ private[spark] class Executor(
           metricsPoller.onTaskCompletion(taskId, task.stageId, task.stageAttemptId)
         }
       }
-    }
+    } // end of run
 
     private def hasFetchFailure: Boolean = {
       task != null && task.context != null && task.context.fetchFailed.isDefined
@@ -976,7 +1020,7 @@ private[spark] class Executor(
       newArchives: Map[String, Long]): Unit = {
     lazy val hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
     synchronized {
-      // Fetch missing dependencies
+      // Fetch missing dependencies 下载缺失的文件
       for ((name, timestamp) <- newFiles if currentFiles.getOrElse(name, -1L) < timestamp) {
         logInfo(s"Fetching $name with timestamp $timestamp")
         // Fetch file with useCache mode, close cache for local mode.
@@ -984,6 +1028,7 @@ private[spark] class Executor(
           hadoopConf, timestamp, useCache = !isLocal)
         currentFiles(name) = timestamp
       }
+      // 下载缺失的归档文件
       for ((name, timestamp) <- newArchives if currentArchives.getOrElse(name, -1L) < timestamp) {
         logInfo(s"Fetching $name with timestamp $timestamp")
         val sourceURI = new URI(name)
@@ -999,6 +1044,7 @@ private[spark] class Executor(
         Utils.unpack(source, dest)
         currentArchives(name) = timestamp
       }
+      // 下载缺失的 jar
       for ((name, timestamp) <- newJars) {
         val localName = new URI(name).getPath.split("/").last
         val currentTimeStamp = currentJars.get(name)
@@ -1047,20 +1093,24 @@ private[spark] class Executor(
       }
     }
 
+    // 构造 Heartbeat 心跳请求
     val message = Heartbeat(executorId, accumUpdates.toArray, env.blockManager.blockManagerId,
       executorUpdates)
     try {
+      // 向 Driver 发送心跳请求
       val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
         message, new RpcTimeout(HEARTBEAT_INTERVAL_MS.millis, EXECUTOR_HEARTBEAT_INTERVAL.key))
       if (!executorShutdown.get && response.reregisterBlockManager) {
         logInfo("Told to re-register on heartbeat")
+        // 向 Driver 重新注册自己的 BlockManager
         env.blockManager.reregister()
       }
+      // 重置心跳失败计数器
       heartbeatFailures = 0
     } catch {
       case NonFatal(e) =>
         logWarning("Issue communicating with driver in heartbeater", e)
-        heartbeatFailures += 1
+        heartbeatFailures += 1 // 心跳失败计数加 1
         if (heartbeatFailures >= HEARTBEAT_MAX_FAILURES) {
           logError(s"Exit as unable to send heartbeats to driver " +
             s"more than $HEARTBEAT_MAX_FAILURES times")

@@ -37,10 +37,10 @@ import org.apache.spark.sql.util.SchemaUtils
  */
 @Stable
 case class StructField(
-    name: String,
-    dataType: DataType,
-    nullable: Boolean = true,
-    metadata: Metadata = Metadata.empty) {
+    name: String, // 字段名称
+    dataType: DataType, // 字段类型
+    nullable: Boolean = true, // 是否允许为 null
+    metadata: Metadata = Metadata.empty) { // 元数据
 
   /** No-arg constructor for kryo. */
   protected def this() = this(null, null)

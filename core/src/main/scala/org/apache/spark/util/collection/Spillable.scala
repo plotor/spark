@@ -55,20 +55,24 @@ private[spark] abstract class Spillable[C](taskMemoryManager: TaskMemoryManager)
 
   // Force this collection to spill when there are this many elements in memory
   // For testing only
+  // 强制溢写的元素个数阈值
   private[this] val numElementsForceSpillThreshold: Int =
     SparkEnv.get.conf.get(SHUFFLE_SPILL_NUM_ELEMENTS_FORCE_SPILL_THRESHOLD)
 
   // Threshold for this collection's size in bytes before we start tracking its memory usage
   // To avoid a large number of small spills, initialize this to a value orders of magnitude > 0
+  // 记录已经获取到的内存大小上限
   @volatile private[this] var myMemoryThreshold = initialMemoryThreshold
 
   // Number of elements read from input since last spill
   private[this] var _elementsRead = 0
 
   // Number of bytes spilled in total
+  // 溢写的总字节数
   @volatile private[this] var _memoryBytesSpilled = 0L
 
   // Number of spills
+  // 溢写次数
   private[this] var _spillCount = 0
 
   /**
@@ -84,6 +88,7 @@ private[spark] abstract class Spillable[C](taskMemoryManager: TaskMemoryManager)
     if (elementsRead % 32 == 0 && currentMemory >= myMemoryThreshold) {
       // Claim up to double our current memory from the shuffle memory pool
       val amountToRequest = 2 * currentMemory - myMemoryThreshold
+      // 尝试申请期望大小的内存
       val granted = acquireMemory(amountToRequest)
       myMemoryThreshold += granted
       // If we were granted too little memory to grow further (either tryToAcquire returned 0,
@@ -95,9 +100,11 @@ private[spark] abstract class Spillable[C](taskMemoryManager: TaskMemoryManager)
     if (shouldSpill) {
       _spillCount += 1
       logSpillage(currentMemory)
+      // 执行 spill
       spill(collection)
       _elementsRead = 0
       _memoryBytesSpilled += currentMemory
+      // 释放内存
       releaseMemory()
     }
     shouldSpill

@@ -49,6 +49,15 @@ class SparkSqlParserSuite extends AnalysisTest {
   private def intercept(sqlCommand: String, messages: String*): Unit =
     interceptParseException(parser.parsePlan)(sqlCommand, messages: _*)()
 
+  test("Deepin Spark SQL") {
+    val unresolvedLogicalPlan = parser.parsePlan("SELECT site_id, pv FROM t_user WHERE user_id > 1001 LIMIT 10")
+    println(unresolvedLogicalPlan.treeString)
+
+    // val analyzer = spark.sessionState.analyzer
+    // val analyzedLogicalPlan = analyzer.executeAndCheck(unresolvedLogicalPlan, new QueryPlanningTracker)
+    // println(analyzedLogicalPlan.treeString)
+  }
+
   test("Checks if SET/RESET can parse all the configurations") {
     // Force to build static SQL configurations
     StaticSQLConf

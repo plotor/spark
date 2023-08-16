@@ -131,6 +131,8 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
   }
 
   /**
+   * 指标体系
+   *
    * @return All metrics containing metrics of this SparkPlan.
    */
   def metrics: Map[String, SQLMetric] = Map.empty
@@ -154,6 +156,8 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
    * Note this method may fail if it is invoked before `EnsureRequirements` is applied
    * since `PartitioningCollection` requires all its partitionings to have
    * the same number of partitions.
+   *
+   * 定义了当前 SparkPlan 对输出数据(RDD)的分区操作
    */
   def outputPartitioning: Partitioning = UnknownPartitioning(0) // TODO: WRONG WIDTH!
 
@@ -171,14 +175,24 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
    * for its right child, then it's guaranteed that left and right child are co-partitioned by
    * a,b/c,d, which means tuples of same value are in the partitions of same index, e.g.,
    * (a=1,b=2) and (c=1,d=2) are both in the second partition of left and right child.
+   *
+   * 对子节点输出 RDD 进行约束，定义当前 SparkPlan 所需的数据分布方式
    */
   def requiredChildDistribution: Seq[Distribution] =
     Seq.fill(children.size)(UnspecifiedDistribution)
 
-  /** Specifies how data is ordered in each partition. */
+  /**
+   * Specifies how data is ordered in each partition.
+   *
+   * 则定义了每个数据分区的排序方式
+   */
   def outputOrdering: Seq[SortOrder] = Nil
 
-  /** Specifies sort order for each partition requirements on the input data for this operator. */
+  /**
+   * Specifies sort order for each partition requirements on the input data for this operator.
+   *
+   * 对子节点输出 RDD 进行约束，定义当前 SparkPlan 所需的数据排序方式
+   */
   def requiredChildOrdering: Seq[Seq[SortOrder]] = Seq.fill(children.size)(Nil)
 
   /**

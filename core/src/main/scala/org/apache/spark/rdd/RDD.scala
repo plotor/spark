@@ -82,6 +82,7 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
  */
 abstract class RDD[T: ClassTag](
     @transient private var _sc: SparkContext,
+    // 存储当前 RDD 的前置依赖
     @transient private var deps: Seq[Dependency[_]]
   ) extends Serializable with Logging {
 
@@ -110,6 +111,10 @@ abstract class RDD[T: ClassTag](
   /**
    * :: DeveloperApi ::
    * Implemented by subclasses to compute a given partition.
+   *
+   * 对 RDD 的指定分区数据执行计算：
+   * - 如果 RDD 是通过已有的文件系统构建的，则 compute 函数读取指定文件系统中的数据；
+   * - 如果 RDD 是通过其他 RDD 转换而来的，则 compute 函数执行转换逻辑，将其他 RDD 的数据进行转换。
    */
   @DeveloperApi
   def compute(split: Partition, context: TaskContext): Iterator[T]
@@ -135,7 +140,7 @@ abstract class RDD[T: ClassTag](
   protected def getPreferredLocations(split: Partition): Seq[String] = Nil
 
   /** Optionally overridden by subclasses to specify how they are partitioned. */
-  @transient val partitioner: Option[Partitioner] = None
+  @transient val partitioner: Option[Partitioner] = None // 分区器
 
   // =======================================================================
   // Methods and fields available on all RDDs
@@ -145,7 +150,7 @@ abstract class RDD[T: ClassTag](
   def sparkContext: SparkContext = sc
 
   /** A unique ID for this RDD (within its SparkContext). */
-  val id: Int = sc.newRddId()
+  val id: Int = sc.newRddId() // RDD 唯一标识
 
   /** A friendly name for this RDD */
   @transient var name: String = _
@@ -239,6 +244,7 @@ abstract class RDD[T: ClassTag](
   // When we overwrite the dependencies we keep a weak reference to the old dependencies
   // for user controlled cleanup.
   @volatile @transient private var legacyDependencies: WeakReference[Seq[Dependency[_]]] = _
+  // 当前 RDD 的分区数组
   @volatile @transient private var partitions_ : Array[Partition] = _
 
   /** An Option holding our checkpoint RDD, if we are checkpointed */
@@ -321,11 +327,15 @@ abstract class RDD[T: ClassTag](
    * Internal method to this RDD; will read from cache if applicable, or otherwise compute it.
    * This should ''not'' be called by users directly, but is available for implementers of custom
    * subclasses of RDD.
+   *
+   * 迭代计算
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
     if (storageLevel != StorageLevel.NONE) {
+      // 获取或计算 RDD 指定分区的计算结果
       getOrCompute(split, context)
     } else {
+      // 分区任务可能是初次执行
       computeOrReadCheckpoint(split, context)
     }
   }
@@ -334,6 +344,8 @@ abstract class RDD[T: ClassTag](
    * Return the ancestors of the given RDD that are related to it only through a sequence of
    * narrow dependencies. This traverses the given RDD's dependency tree using DFS, but maintains
    * no ordering on the RDDs returned.
+   *
+   * 获取当前 RDD 前置依赖中属于 NarrowDependency 的 RDD 序列
    */
   private[spark] def getNarrowAncestors: Seq[RDD[_]] = {
     val ancestors = new mutable.HashSet[RDD[_]]
@@ -362,6 +374,7 @@ abstract class RDD[T: ClassTag](
     if (isCheckpointedAndMaterialized) {
       firstParent[T].iterator(split, context)
     } else {
+      // 对 RDD 的指定分区数据执行计算
       compute(split, context)
     }
   }
@@ -373,6 +386,7 @@ abstract class RDD[T: ClassTag](
     val blockId = RDDBlockId(id, partition.index)
     var readCachedBlock = true
     // This method is called on executors, so we need call SparkEnv.get instead of sc.env.
+    // 尝试从存储体系中获取 RDD 分区的 Block，如果不命中则尝试从检查点读取或计算
     SparkEnv.get.blockManager.getOrElseUpdate(blockId, storageLevel, elementClassTag, () => {
       readCachedBlock = false
       computeOrReadCheckpoint(partition, context)
@@ -1826,7 +1840,7 @@ abstract class RDD[T: ClassTag](
   @transient private var resourceProfile: Option[ResourceProfile] = None
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
-  @transient private[spark] val creationSite = sc.getCallSite()
+  @transient private[spark] val creationSite = sc.getCallSite() // 创建当前 RDD 的用户代码
 
   /**
    * The scope associated with the operation that created this RDD.
@@ -1835,7 +1849,7 @@ abstract class RDD[T: ClassTag](
    * detail, see the documentation of {{RDDOperationScope}}. This scope is not defined if the
    * user instantiates this RDD himself without using any Spark operations.
    */
-  @transient private[spark] val scope: Option[RDDOperationScope] = {
+  @transient private[spark] val scope: Option[RDDOperationScope] = { // 作用域
     Option(sc.getLocalProperty(SparkContext.RDD_SCOPE_KEY)).map(RDDOperationScope.fromJson)
   }
 
@@ -1843,6 +1857,7 @@ abstract class RDD[T: ClassTag](
 
   private[spark] def elementClassTag: ClassTag[T] = classTag[T]
 
+  // 当前 RDD 的检查点数据
   private[spark] var checkpointData: Option[RDDCheckpointData[T]] = None
 
   // Whether to checkpoint all ancestor RDDs that are marked for checkpointing. By default,
@@ -1850,6 +1865,7 @@ abstract class RDD[T: ClassTag](
   // less data but is not safe for all workloads. E.g. in streaming we may checkpoint both
   // an RDD and its parent in every batch, in which case the parent may never be checkpointed
   // and its lineage never truncated, leading to OOMs in the long run (SPARK-6847).
+  // 是否对所有标记了需要保存检查点的祖先保存检查点
   private val checkpointAllMarkedAncestors =
     Option(sc.getLocalProperty(RDD.CHECKPOINT_ALL_MARKED_ANCESTORS)).exists(_.toBoolean)
 
@@ -1884,6 +1900,7 @@ abstract class RDD[T: ClassTag](
   }
 
   // Avoid handling doCheckpoint multiple times to prevent excessive recursion
+  // 是否已经调用了doCheckpoint方法设置检查点，避免对RDD多次设置检查点
   @transient private var doCheckpointCalled = false
 
   /**
@@ -2027,8 +2044,10 @@ abstract class RDD[T: ClassTag](
 
   // From performance concern, cache the value to avoid repeatedly compute `isBarrier()` on a long
   // RDD chain.
-  @transient protected lazy val isBarrier_ : Boolean =
+  @transient protected lazy val isBarrier_ : Boolean = {
+    // 当前 RDD 的前置 NarrowDependency 依赖中存在 Barrier RDD
     dependencies.filter(!_.isInstanceOf[ShuffleDependency[_, _, _]]).exists(_.rdd.isBarrier())
+  }
 
   private final lazy val _outputDeterministicLevel: DeterministicLevel.Value =
     getOutputDeterministicLevel

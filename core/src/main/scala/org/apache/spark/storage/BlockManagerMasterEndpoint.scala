@@ -58,6 +58,7 @@ class BlockManagerMasterEndpoint(
   extends IsolatedRpcEndpoint with Logging {
 
   // Mapping from executor id to the block manager's local disk directories.
+  // 缓存 executor 与对应 BlockManager 的本地磁盘目录的映射关系
   private val executorIdToLocalDirs =
     CacheBuilder
       .newBuilder()
@@ -69,12 +70,14 @@ class BlockManagerMasterEndpoint(
     new mutable.HashMap[BlockManagerId, BlockStatusPerBlockId]
 
   // Mapping from executor ID to block manager ID.
+  // [ExecutorId, BlockManagerId]
   private val blockManagerIdByExecutor = new mutable.HashMap[String, BlockManagerId]
 
   // Set of block managers which are decommissioning
   private val decommissioningBlockManagerSet = new mutable.HashSet[BlockManagerId]
 
   // Mapping from block id to the set of block managers that have the block.
+  // 记录包含指定 BlockId 的 BlockManager 列表
   private val blockLocations = new JHashMap[BlockId, mutable.HashSet[BlockManagerId]]
 
   // Mapping from host name to shuffle (mergers) services where the current app
@@ -89,6 +92,7 @@ class BlockManagerMasterEndpoint(
     ThreadUtils.newDaemonCachedThreadPool("block-manager-ask-thread-pool", 100)
   private implicit val askExecutionContext = ExecutionContext.fromExecutorService(askThreadPool)
 
+  // 集群所有节点的拓扑结构信息
   private val topologyMapper = {
     val topologyMapperClassName = conf.get(
       config.STORAGE_REPLICATION_TOPOLOGY_MAPPER)
@@ -117,11 +121,12 @@ class BlockManagerMasterEndpoint(
     RpcUtils.makeDriverRef(CoarseGrainedSchedulerBackend.ENDPOINT_NAME, conf, rpcEnv)
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+    // 处理注册 BlockManager 请求
     case RegisterBlockManager(
       id, localDirs, maxOnHeapMemSize, maxOffHeapMemSize, endpoint, isReRegister) =>
       context.reply(
         register(id, localDirs, maxOnHeapMemSize, maxOffHeapMemSize, endpoint, isReRegister))
-
+    // 处理上报指定 Block 状态请求
     case _updateBlockInfo @
         UpdateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size) =>
 
@@ -134,6 +139,7 @@ class BlockManagerMasterEndpoint(
         context.reply(success)
       }
 
+      // Shuffle Block
       if (blockId.isShuffle) {
         updateShuffleBlockInfo(blockId, blockManagerId).foreach(handleResult)
       } else {
@@ -143,6 +149,7 @@ class BlockManagerMasterEndpoint(
     case GetLocations(blockId) =>
       context.reply(getLocations(blockId))
 
+    // 处理器获取指定 Block 位置和状态的请求
     case GetLocationsAndStatus(blockId, requesterHost) =>
       context.reply(getLocationsAndStatus(blockId, requesterHost))
 
@@ -578,6 +585,7 @@ class BlockManagerMasterEndpoint(
       isReRegister: Boolean): BlockManagerId = {
     // the dummy id is not expected to contain the topology information.
     // we get that info here and respond back with a more fleshed out block manager id
+    // 填充 topologyInfo
     val id = BlockManagerId(
       idWithoutTopologyInfo.executorId,
       idWithoutTopologyInfo.host,
@@ -585,6 +593,7 @@ class BlockManagerMasterEndpoint(
       topologyMapper.getTopologyForHost(idWithoutTopologyInfo.host))
 
     val time = System.currentTimeMillis()
+    // 更新 executor 与对应 BlockManager 的本地磁盘目录的映射关系
     executorIdToLocalDirs.put(id.executorId, localDirs)
     // SPARK-41360: For the block manager re-registration, we should only allow it when
     // the executor is recognized as active by the scheduler backend. Otherwise, this kind
@@ -699,8 +708,10 @@ class BlockManagerMasterEndpoint(
       return true
     }
 
+    // 获取 blockManagerId 对应的 BlockManagerInfo，并执行 BlockManagerInfo#updateBlockInfo
     blockManagerInfo(blockManagerId).updateBlockInfo(blockId, storageLevel, memSize, diskSize)
 
+    // 更新包含当前 Block 的 BlockManager 列表
     var locations: mutable.HashSet[BlockManagerId] = null
     if (blockLocations.containsKey(blockId)) {
       locations = blockLocations.get(blockId)
@@ -737,8 +748,11 @@ class BlockManagerMasterEndpoint(
 
   private def getLocationsAndStatus(
       blockId: BlockId,
+      // 请求发起方所在节点的 host 地址
       requesterHost: String): Option[BlockLocationsAndStatus] = {
+    // 获取 Block 所在的 BlockManager 列表
     val locations = Option(blockLocations.get(blockId)).map(_.toSeq).getOrElse(Seq.empty)
+    // 获取 Block 状态
     val status = locations.headOption.flatMap { bmId =>
       if (externalShuffleServiceRddFetchEnabled && bmId.port == externalShuffleServicePort) {
         blockStatusByShuffleService.get(bmId).flatMap(m => m.get(blockId))
@@ -837,7 +851,11 @@ class BlockManagerMasterEndpoint(
 }
 
 @DeveloperApi
-case class BlockStatus(storageLevel: StorageLevel, memSize: Long, diskSize: Long) {
+case class BlockStatus(
+                        storageLevel: StorageLevel, // 存储级别
+                        memSize: Long, // 占用的内存大小
+                        diskSize: Long) { // 占用的磁盘大小
+  // 标识是否存储到存储体系中
   def isCached: Boolean = memSize + diskSize > 0
 }
 

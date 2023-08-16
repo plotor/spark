@@ -28,15 +28,21 @@ import org.apache.spark.storage.RDDInfo
  * Stores information about a stage to pass from the scheduler to SparkListeners.
  */
 @DeveloperApi
-class StageInfo(
+class StageInfo( // 描述 Stage 的元数据
     val stageId: Int,
     private val attemptId: Int,
+    // Stage 名称
     val name: String,
+    // 当前 Stage Task 数量
     val numTasks: Int,
+    // 当前 Stage 对应的 RDD 元数据集合
     val rddInfos: Seq[RDDInfo],
+    // 前置依赖的 Stage ID 集合
     val parentIds: Seq[Int],
+    // 线程栈信息
     val details: String,
     val taskMetrics: TaskMetrics = null,
+    // Task 本地偏好
     private[spark] val taskLocalityPreferences: Seq[Seq[TaskLocation]] = Seq.empty,
     private[spark] val shuffleDepId: Option[Int] = None,
     val resourceProfileId: Int,
@@ -52,6 +58,8 @@ class StageInfo(
   /**
    * Terminal values of accumulables updated during this stage, including all the user-defined
    * accumulators.
+   *
+   * 存储所有聚合器计算的最终值
    */
   val accumulables = HashMap[Long, AccumulableInfo]()
 

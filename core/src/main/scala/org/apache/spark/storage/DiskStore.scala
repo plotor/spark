@@ -43,16 +43,18 @@ import org.apache.spark.util.io.ChunkedByteBuffer
  */
 private[spark] class DiskStore(
     conf: SparkConf,
-    diskManager: DiskBlockManager,
+    diskManager: DiskBlockManager, // 管理逻辑 Block 与磁盘文件之间的映射关系
     securityManager: SecurityManager) extends Logging {
 
   private val minMemoryMapBytes = conf.get(config.STORAGE_MEMORY_MAP_THRESHOLD)
   private val maxMemoryMapBytes = conf.get(config.MEMORY_MAP_LIMIT_FOR_TESTS)
+  // 记录目标 block 文件大小
   private val blockSizes = new ConcurrentHashMap[BlockId, Long]()
 
   private val shuffleServiceFetchRddEnabled = conf.get(config.SHUFFLE_SERVICE_ENABLED) &&
     conf.get(config.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
 
+  // 获取指定 block 的大小
   def getSize(blockId: BlockId): Long = blockSizes.get(blockId)
 
   /**
@@ -61,6 +63,7 @@ private[spark] class DiskStore(
    * @throws IllegalStateException if the block already exists in the disk store.
    */
   def put(blockId: BlockId)(writeFunc: WritableByteChannel => Unit): Unit = {
+    // 如果目标 block 文件已经存在则删除
     if (contains(blockId)) {
       logWarning(s"Block $blockId is already present in the disk store")
       try {
@@ -73,6 +76,7 @@ private[spark] class DiskStore(
     }
     logDebug(s"Attempting to put block $blockId")
     val startTimeNs = System.nanoTime()
+    // 通过 DiskBlockManager 获取指定 Block 对应的本地磁盘文件，返回 File 对象
     val file = diskManager.getFile(blockId)
 
     // SPARK-37618: If fetching cached RDDs from the shuffle service is enabled, we must make
@@ -81,10 +85,13 @@ private[spark] class DiskStore(
     if (shuffleServiceFetchRddEnabled) {
       diskManager.createWorldReadableFile(file)
     }
+    // 获取 block 文件对应的写 Channel
     val out = new CountingWritableChannel(openForWrite(file))
     var threwException: Boolean = true
     try {
+      // 执行 writeFunc 函数，写 block 文件
       writeFunc(out)
+      // 记录 block 文件大小
       blockSizes.put(blockId, out.getCount)
       threwException = false
     } finally {
@@ -126,6 +133,7 @@ private[spark] class DiskStore(
       new DiskBlockData(minMemoryMapBytes, maxMemoryMapBytes, f, blockSize)
   }
 
+  // 删除目标 block 对应的磁盘文件
   def remove(blockId: BlockId): Boolean = {
     blockSizes.remove(blockId)
     val file = diskManager.getFile(blockId.name)
@@ -150,8 +158,10 @@ private[spark] class DiskStore(
     FileUtils.moveFile(sourceFile, targetFile)
   }
 
+  // 判断本地磁盘路径下是否存在目标 block 对应的文件
   def contains(blockId: BlockId): Boolean = diskManager.containsBlock(blockId)
 
+  // 获取文件对应的 Channel，用于后续写文件
   private def openForWrite(file: File): WritableByteChannel = {
     val out = new FileOutputStream(file).getChannel()
     try {

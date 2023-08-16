@@ -111,7 +111,9 @@ private[spark] class ExecutorAllocationManager(
   import ExecutorAllocationManager._
 
   // Lower and upper bounds on the number of executors.
+  // spark.dynamicAllocation.minExecutors，默认为 0
   private val minNumExecutors = conf.get(DYN_ALLOCATION_MIN_EXECUTORS)
+  // spark.dynamicAllocation.maxExecutors，默认为 Integer.MAX
   private val maxNumExecutors = conf.get(DYN_ALLOCATION_MAX_EXECUTORS)
   private val initialNumExecutors = Utils.getDynamicAllocationInitialExecutors(conf)
 
@@ -132,6 +134,7 @@ private[spark] class ExecutorAllocationManager(
 
   private val defaultProfileId = resourceProfileManager.defaultResourceProfile.id
 
+  // 校验配置项
   validateSettings()
 
   // Number of executors to add for each ResourceProfile in the next round
@@ -142,6 +145,7 @@ private[spark] class ExecutorAllocationManager(
   // is the number of executors we would immediately want from the cluster manager.
   // Note every profile will be allowed to have initial number,
   // we may want to make this configurable per Profile in the future
+  // 记录每个 ResourceProfile 期望的 Executor 数目
   private[spark] val numExecutorsTargetPerResourceProfileId = new mutable.HashMap[Int, Int]
   numExecutorsTargetPerResourceProfileId(defaultProfileId) = initialNumExecutors
 
@@ -173,10 +177,12 @@ private[spark] class ExecutorAllocationManager(
   @volatile private var initializing: Boolean = true
 
   // Number of locality aware tasks for each ResourceProfile, used for executor placement.
+  // 记录每个 ResourceProfile 在本地的 Task 数目
   private var numLocalityAwareTasksPerResourceProfileId = new mutable.HashMap[Int, Int]
   numLocalityAwareTasksPerResourceProfileId(defaultProfileId) = 0
 
   // ResourceProfile id to Host to possible task running on it, used for executor placement.
+  // 记录每个 ResourceProfile 对应在各个 host 上的 Task 数目
   private var rpIdToHostToLocalTaskCount: Map[Int, Map[String, Int]] = Map.empty
 
   /**
@@ -226,13 +232,19 @@ private[spark] class ExecutorAllocationManager(
    * the scheduling task.
    */
   def start(): Unit = {
+    // 向 EventBus 注册 ExecutorAllocationListener
     listenerBus.addToManagementQueue(listener)
     listenerBus.addToManagementQueue(executorMonitor)
     cleaner.foreach(_.attachListener(executorMonitor))
 
+    // 异步任务，默认 100ms 执行一次
     val scheduleTask = new Runnable() {
       override def run(): Unit = {
         try {
+          /*
+           * 1. 计算哪些 Executor 需要被移除，并执行移除操作
+           * 2. 更新每个 ResourceProfile 对应的 Executor 数目，如果不足则向资源管理器申请
+           */
           schedule()
         } catch {
           case ct: ControlThrowable =>
@@ -254,6 +266,7 @@ private[spark] class ExecutorAllocationManager(
       (numTarget, numLocality)
     }
 
+    // 为每个 ResourceProfile 申请期望数量的 Executor
     client.requestTotalExecutors(numExecutorsTarget, numLocalityAware, rpIdToHostToLocalTaskCount)
   }
 
@@ -336,14 +349,17 @@ private[spark] class ExecutorAllocationManager(
    * This is factored out into its own method for testing.
    */
   private def schedule(): Unit = synchronized {
+    // 获取需要被移除的 Executor 列表
     val executorIdsToBeRemoved = executorMonitor.timedOutExecutors()
     if (executorIdsToBeRemoved.nonEmpty) {
       initializing = false
     }
 
+    // 更新每个 RP 的目标 Executor 数目
     // Update executor target number only after initializing flag is unset
     updateAndSyncNumExecutorsTarget(clock.nanoTime())
     if (executorIdsToBeRemoved.nonEmpty) {
+      // 移除对应的 Executor
       removeExecutors(executorIdsToBeRemoved)
     }
   }

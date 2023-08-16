@@ -58,8 +58,8 @@ private class MutableInt(var i: Int)
  * objects which contain SQL text.
  */
 case class Origin(
-  line: Option[Int] = None,
-  startPosition: Option[Int] = None,
+  line: Option[Int] = None, // 行号
+  startPosition: Option[Int] = None, // 偏移量
   startIndex: Option[Int] = None,
   stopIndex: Option[Int] = None,
   sqlText: Option[String] = None,
@@ -191,6 +191,9 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
 // scalastyle:on
   self: BaseType =>
 
+  /**
+   * 获取当前节点对应 SQL 字符串中的行数和起始位置
+   */
   val origin: Origin = CurrentOrigin.get
 
   /**
@@ -401,6 +404,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
 
   /**
    * Returns a Seq containing the leaves in this tree.
+   * 获取当前节点所有的叶子节点
    */
   def collectLeaves(): Seq[BaseType] = {
     this.collect { case p if p.children.isEmpty => p }
@@ -409,6 +413,8 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
   /**
    * Finds and returns the first [[TreeNode]] of the tree for which the given partial function
    * is defined (pre-order), and applies the partial function to it.
+   *
+   * 先序遍历，并返回第一个满足条件的节点
    */
   def collectFirst[B](pf: PartialFunction[BaseType, B]): Option[B] = {
     val lifted = pf.lift
@@ -450,6 +456,9 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
     }
   }
 
+  /**
+   * 将当前节点的子节点替换成新的子节点
+   */
   final def withNewChildren(newChildren: Seq[BaseType]): BaseType = {
     val childrenIndexedSeq = asIndexedSeq(children)
     val newChildrenIndexedSeq = asIndexedSeq(newChildren)
@@ -554,6 +563,8 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
    * Returns a copy of this node where `rule` has been recursively applied to it and all of its
    * children (pre-order). When `rule` does not apply to a given node it is left unchanged.
    *
+   * 以先序遍历的方式将规则 rule 应用到所有节点
+   *
    * @param rule the function used to transform this nodes children
    */
   def transformDown(rule: PartialFunction[BaseType, BaseType]): BaseType = {
@@ -604,6 +615,8 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product with Tre
    * Returns a copy of this node where `rule` has been recursively applied first to all of its
    * children and then itself (post-order). When `rule` does not apply to a given node, it is left
    * unchanged.
+   *
+   * 以后序遍历的方式将规则 rule 应用到所有节点
    *
    * @param rule   the function used to transform this nodes children
    */

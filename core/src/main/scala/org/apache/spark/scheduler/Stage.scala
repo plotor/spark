@@ -56,17 +56,18 @@ import org.apache.spark.util.CallSite
 private[scheduler] abstract class Stage(
     val id: Int,
     val rdd: RDD[_],
-    val numTasks: Int,
-    val parents: List[Stage],
+    val numTasks: Int, // 当前 Stage 包含的 task 数量
+    val parents: List[Stage], // 依赖的上游 Stage 列表
     val firstJobId: Int,
-    val callSite: CallSite,
+    val callSite: CallSite, // 与当前 Stage 相关联的调用栈信息
     val resourceProfileId: Int)
   extends Logging {
 
+  // 当前 Stage 的分区数
   val numPartitions = rdd.partitions.length
 
   /** Set of jobs that this stage belongs to. */
-  val jobIds = new HashSet[Int]
+  val jobIds = new HashSet[Int] // 记录当前 Stage 所属的 JobId 集合？
 
   /** The ID to use for the next new attempt for this stage. */
   private var nextAttemptId: Int = 0
@@ -79,6 +80,8 @@ private[scheduler] abstract class Stage(
    * here, before any attempts have actually been created, because the DAGScheduler uses this
    * StageInfo to tell SparkListeners when a job starts (which happens before any stage attempts
    * have been created).
+   *
+   * 最近一次的尝试信息
    */
   private var _latestInfo: StageInfo =
     StageInfo.fromStage(this, nextAttemptId, resourceProfileId = resourceProfileId)
@@ -95,15 +98,18 @@ private[scheduler] abstract class Stage(
     failedAttemptIds.clear()
   }
 
+  // 创建最近一次尝试的 StageInfo，并分配尝试 ID
   /** Creates a new attempt for this stage by creating a new StageInfo with a new attempt ID. */
   def makeNewStageAttempt(
       numPartitionsToCompute: Int,
       taskLocalityPreferences: Seq[Seq[TaskLocation]] = Seq.empty): Unit = {
     val metrics = new TaskMetrics
     metrics.register(rdd.sparkContext)
+    // 创建 StageInfo
     _latestInfo = StageInfo.fromStage(
       this, nextAttemptId, Some(numPartitionsToCompute), metrics, taskLocalityPreferences,
       resourceProfileId = resourceProfileId)
+    // 递增 attemptId
     nextAttemptId += 1
   }
 
@@ -125,7 +131,7 @@ private[scheduler] abstract class Stage(
   }
 
   /** Returns the sequence of partition ids that are missing (i.e. needs to be computed). */
-  def findMissingPartitions(): Seq[Int]
+  def findMissingPartitions(): Seq[Int] // 返回还未计算完成的分区 ID 集合
 
   def isIndeterminate: Boolean = {
     rdd.outputDeterministicLevel == DeterministicLevel.INDETERMINATE

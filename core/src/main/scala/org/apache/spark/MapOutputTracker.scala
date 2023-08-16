@@ -498,7 +498,7 @@ private[spark] class MapOutputTrackerMasterEndpoint(
 */
 private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging {
   /** Set to the MapOutputTrackerMasterEndpoint living on the driver. */
-  var trackerEndpoint: RpcEndpointRef = _
+  var trackerEndpoint: RpcEndpointRef = _ // MapOutputTrackerMasterEndpoint RPC 客户端
 
   /**
    * The driver-side counter is incremented every time that a map output is lost. This value is sent
@@ -651,6 +651,7 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
 private[spark] class MapOutputTrackerMaster(
     conf: SparkConf,
     private[spark] val broadcastManager: BroadcastManager,
+    // 是否是 local 模式
     private[spark] val isLocal: Boolean)
   extends MapOutputTracker(conf) {
 
@@ -675,6 +676,7 @@ private[spark] class MapOutputTrackerMaster(
   // HashMap for storing shuffleStatuses in the driver.
   // Statuses are dropped only by explicit de-registering.
   // Exposed for testing
+  // [shuffleId, shuffleStatus]
   val shuffleStatuses = new ConcurrentHashMap[Int, ShuffleStatus]().asScala
 
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)
@@ -1220,9 +1222,11 @@ private[spark] class MapOutputTrackerMaster(
  */
 private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTracker(conf) {
 
+  // key is shuffleId
   val mapStatuses: Map[Int, Array[MapStatus]] =
     new ConcurrentHashMap[Int, Array[MapStatus]]().asScala
 
+  // key is shuffleId
   val mergeStatuses: Map[Int, Array[MergeStatus]] =
     new ConcurrentHashMap[Int, Array[MergeStatus]]().asScala
 

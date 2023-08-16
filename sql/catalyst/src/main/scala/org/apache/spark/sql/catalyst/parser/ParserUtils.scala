@@ -153,6 +153,8 @@ object ParserUtils {
       CurrentOrigin.set(positionAndText(ctx.getStart, ctx.getStop, text.get,
         current.objectType, current.objectName))
     }
+    val className = ctx.getClass.getSimpleName
+    println(s"visit${className.substring(0, className.length - 7)}")
     try {
       f
     } finally {

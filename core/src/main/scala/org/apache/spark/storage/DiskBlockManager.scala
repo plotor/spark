@@ -48,15 +48,17 @@ import org.apache.spark.util.{ShutdownHookManager, Utils}
  */
 private[spark] class DiskBlockManager(
     conf: SparkConf,
-    var deleteFilesOnStop: Boolean,
+    var deleteFilesOnStop: Boolean, // 是否在停止 DiskBlockManager 时删除本地目录
     isDriver: Boolean)
   extends Logging {
 
+  // 控制本地子目录数量，按需创建，默认最大为 64
   private[spark] val subDirsPerLocalDir = conf.get(config.DISKSTORE_SUB_DIRECTORIES)
 
   /* Create one local directory for each path mentioned in spark.local.dir; then, inside this
    * directory, create multiple subdirectories that we will hash files into, in order to avoid
    * having really large inodes at the top level. */
+  // 本地目录集合，对应若干以 blockmgr- 开头的 File 对象列表
   private[spark] val localDirs: Array[File] = createLocalDirs(conf)
   if (localDirs.isEmpty) {
     logError("Failed to create any local dir.")
@@ -90,10 +92,14 @@ private[spark] class DiskBlockManager(
   /** Looks up a file by hashing it into one of our local subdirectories. */
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExecutorDiskUtils#getFilePath().
+  // 获取指定文件对应的 File 对象
   def getFile(filename: String): File = {
     // Figure out which local directory it hashes to, and which subdirectory in that
+    // 计算文件名对应的非负哈希值
     val hash = Utils.nonNegativeHash(filename)
+    // 计算一级目录索引
     val dirId = hash % localDirs.length
+    // 就算二级目录索引
     val subDirId = (hash / localDirs.length) % subDirsPerLocalDir
 
     // Create the subdirectory if it doesn't already exist
@@ -105,6 +111,7 @@ private[spark] class DiskBlockManager(
         val newDir = new File(localDirs(dirId), "%02x".format(subDirId))
         if (!newDir.exists()) {
           val path = newDir.toPath
+          // 如果二级目录不存在则创建
           Files.createDirectory(path)
           if (permissionChangingRequired) {
             // SPARK-37618: Create dir as group writable so files within can be deleted by the
@@ -120,9 +127,11 @@ private[spark] class DiskBlockManager(
       }
     }
 
+    // 返回文件对应的 File 对象
     new File(subDir, filename)
   }
 
+  // name 为全局唯一标识
   def getFile(blockId: BlockId): File = getFile(blockId.name)
 
   /**
@@ -247,8 +256,10 @@ private[spark] class DiskBlockManager(
    * be deleted on JVM exit when using the external shuffle service.
    */
   private def createLocalDirs(conf: SparkConf): Array[File] = {
+    // 获取配置的本地目录，并依次在每个目录下创建名为 blockmgr-{uuid} 的子目录
     Utils.getConfiguredLocalDirs(conf).flatMap { rootDir =>
       try {
+        // 创建 blockmgr-{uuid} 格式的子目录
         val localDir = Utils.createDirectory(rootDir, "blockmgr")
         logInfo(s"Created local directory at $localDir")
         Some(localDir)

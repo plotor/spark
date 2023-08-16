@@ -33,6 +33,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
 private[spark] class Heartbeater(
     reportHeartbeat: () => Unit,
     name: String,
+    // 心跳间隔，默认 10s
     intervalMs: Long) extends Logging {
   // Executor for the heartbeat task
   private val heartbeater = ThreadUtils.newDaemonSingleThreadScheduledExecutor(name)

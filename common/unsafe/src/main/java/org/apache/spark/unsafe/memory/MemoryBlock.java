@@ -17,12 +17,14 @@
 
 package org.apache.spark.unsafe.memory;
 
-import javax.annotation.Nullable;
-
 import org.apache.spark.unsafe.Platform;
+
+import javax.annotation.Nullable;
 
 /**
  * A consecutive block of memory, starting at a {@link MemoryLocation} with a fixed size.
+ *
+ * 对标操作系统 Page 概念
  */
 public class MemoryBlock extends MemoryLocation {
 
@@ -45,12 +47,15 @@ public class MemoryBlock extends MemoryLocation {
    */
   public static final int FREED_IN_ALLOCATOR_PAGE_NUMBER = -3;
 
+  // 连续内存块的长度
   private final long length;
 
   /**
    * Optional page number; used when this MemoryBlock represents a page allocated by a
    * TaskMemoryManager. This field is public so that it can be modified by the TaskMemoryManager,
    * which lives in a different package.
+   *
+   * 页号
    */
   public int pageNumber = NO_PAGE_NUMBER;
 

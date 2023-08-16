@@ -55,13 +55,16 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
 
   // Holds keys and values in the same array for memory locality; specifically, the order of
   // elements is key0, value0, key1, value1, key2, value2, etc.
+  // 用于保存 key 和聚合值数组
   private var data = new Array[AnyRef](2 * capacity)
 
   // Treat the null key differently so we can use nulls in "data" to represent empty items.
+  // 是否存在 null key
   private var haveNullValue = false
   private var nullValue: V = null.asInstanceOf[V]
 
   // Triggered by destructiveSortedIterator; the underlying data array may no longer be used
+  // 标识 data 数组不再使用
   private var destroyed = false
   private val destructionMessage = "Map state is invalid from destructive sorting!"
 
@@ -93,6 +96,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   def update(key: K, value: V): Unit = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
+    // null key
     if (k.eq(null)) {
       if (!haveNullValue) {
         incrementSize()
@@ -105,15 +109,22 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     var i = 1
     while (true) {
       val curKey = data(2 * pos)
+      // key 不存在
       if (curKey.eq(null)) {
+        // 写入 key
         data(2 * pos) = k
+        // 在 +1 位置写入 value
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
         incrementSize()  // Since we added a new key
         return
-      } else if (k.eq(curKey) || k.equals(curKey)) {
+      }
+      // key 已存在，更新值
+      else if (k.eq(curKey) || k.equals(curKey)) {
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
         return
-      } else {
+      }
+      // key 冲突，向后探查
+      else {
         val delta = i
         pos = (pos + delta) & mask
         i += 1
@@ -140,17 +151,22 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     var i = 1
     while (true) {
       val curKey = data(2 * pos)
+      // 对应的 key 不存在，直接插入
       if (curKey.eq(null)) {
         val newValue = updateFunc(false, null.asInstanceOf[V])
         data(2 * pos) = k
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         incrementSize()
         return newValue
-      } else if (k.eq(curKey) || k.equals(curKey)) {
+      }
+      // key 已经存在，更新值
+      else if (k.eq(curKey) || k.equals(curKey)) {
         val newValue = updateFunc(true, data(2 * pos + 1).asInstanceOf[V])
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         return newValue
-      } else {
+      }
+      // key 冲突，再探查
+      else {
         val delta = i
         pos = (pos + delta) & mask
         i += 1
@@ -260,6 +276,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   def destructiveSortedIterator(keyComparator: Comparator[K]): Iterator[(K, V)] = {
     destroyed = true
     // Pack KV pairs into the front of the underlying array
+    // 将数据元素向左整理靠拢
     var keyIndex, newIndex = 0
     while (keyIndex < capacity) {
       if (data(2 * keyIndex) != null) {
@@ -271,6 +288,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     }
     assert(curSize == newIndex + (if (haveNullValue) 1 else 0))
 
+    // 使用 TimSort 排序
     new Sorter(new KVArraySortDataFormat[K, AnyRef]).sort(data, 0, newIndex, keyComparator)
 
     new Iterator[(K, V)] {

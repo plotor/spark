@@ -47,6 +47,8 @@ import org.apache.spark.util.Utils
 
 /**
  * A BlockTransferService that uses Netty to fetch a set of blocks at time.
+ *
+ * 提供了可以被其他节点的客户端访问的Shuffle服务
  */
 private[spark] class NettyBlockTransferService(
     conf: SparkConf,

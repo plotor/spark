@@ -31,6 +31,8 @@ import org.apache.spark.util.{LongAccumulator, ThreadUtils, Utils}
 
 /**
  * Runs a thread pool that deserializes and remotely fetches (if necessary) task results.
+ *
+ * 用于对序列化的Task执行结果进行反序列化，得到Task执行结果
  */
 private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedulerImpl)
   extends Logging {
@@ -54,6 +56,9 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     }
   }
 
+  /**
+   * 处理执行成功的 Task 的执行结果
+   */
   def enqueueSuccessfulTask(
       taskSetManager: TaskSetManager,
       tid: Long,
@@ -61,6 +66,7 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     getTaskResultExecutor.execute(new Runnable {
       override def run(): Unit = Utils.logUncaughtExceptions {
         try {
+          // 反序列化
           val (result, size) = serializer.get().deserialize[TaskResult[_]](serializedData) match {
             case directResult: DirectTaskResult[_] =>
               if (!taskSetManager.canFetchMoreResults(serializedData.limit())) {
@@ -130,6 +136,9 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     })
   }
 
+  /**
+   * 处理执行失败的 Task
+   */
   def enqueueFailedTask(taskSetManager: TaskSetManager, tid: Long, taskState: TaskState,
     serializedData: ByteBuffer): Unit = {
     var reason : TaskFailedReason = UnknownReason
@@ -138,8 +147,8 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
         val loader = Utils.getContextOrSparkClassLoader
         try {
           if (serializedData != null && serializedData.limit() > 0) {
-            reason = serializer.get().deserialize[TaskFailedReason](
-              serializedData, loader)
+            // 对执行结果进行反序列化
+            reason = serializer.get().deserialize[TaskFailedReason](serializedData, loader)
           }
         } catch {
           case _: ClassNotFoundException =>

@@ -96,6 +96,7 @@ private[sql] object Dataset {
   def ofRows(sparkSession: SparkSession, logicalPlan: LogicalPlan, tracker: QueryPlanningTracker)
     : DataFrame = sparkSession.withActive {
     val qe = new QueryExecution(sparkSession, logicalPlan, tracker)
+    // Unresolved LogicalPlain -> Analyzed LogicalPlan
     qe.assertAnalyzed()
     new Dataset[Row](qe, RowEncoder(qe.analyzed.schema))
   }

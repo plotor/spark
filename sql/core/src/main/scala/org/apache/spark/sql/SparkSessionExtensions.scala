@@ -236,7 +236,7 @@ class SparkSessionExtensions {
   private[this] val preCBORules = mutable.Buffer.empty[RuleBuilder]
 
   private[sql] def buildPreCBORules(session: SparkSession): Seq[Rule[LogicalPlan]] = {
-    preCBORules.map(_.apply(session)).toSeq
+    preCBORules.map(_.apply(session))
   }
 
   /**
@@ -251,7 +251,7 @@ class SparkSessionExtensions {
   private[this] val plannerStrategyBuilders = mutable.Buffer.empty[StrategyBuilder]
 
   private[sql] def buildPlannerStrategies(session: SparkSession): Seq[Strategy] = {
-    plannerStrategyBuilders.map(_.apply(session)).toSeq
+    plannerStrategyBuilders.map(_.apply(session))
   }
 
   /**

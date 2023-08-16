@@ -64,10 +64,16 @@ private[spark] class TaskContextImpl(
    *
    * Using a stack causes us to process listeners in reverse order of registration. As listeners are
    * invoked, they are popped from the stack.
+   *
+   * 任务执行完成监听器
    */
   @transient private val onCompleteCallbacks = new Stack[TaskCompletionListener]
 
-  /** List of callback functions to execute when the task fails. */
+  /**
+   * List of callback functions to execute when the task fails.
+   *
+   * 任务执行失败监听器
+   */
   @transient private val onFailureCallbacks = new Stack[TaskFailureListener]
 
   /**
@@ -80,7 +86,7 @@ private[spark] class TaskContextImpl(
   // If defined, the corresponding task has been killed and this option contains the reason.
   @volatile private var reasonIfKilled: Option[String] = None
 
-  // Whether the task has completed.
+  // Whether the task has completed. 标识任务是否已经完成
   private var completed: Boolean = false
 
   // If defined, the task has failed and this option contains the Throwable that caused the task to
@@ -120,6 +126,9 @@ private[spark] class TaskContextImpl(
     resources.asJava
   }
 
+  /**
+   * 标识 Task 执行失败
+   */
   private[spark] override def markTaskFailed(error: Throwable): Unit = {
     synchronized {
       if (failureCauseOpt.isDefined) return
@@ -128,6 +137,9 @@ private[spark] class TaskContextImpl(
     invokeTaskFailureListeners(error)
   }
 
+  /**
+   * 标识 Task 执行完成
+   */
   private[spark] override def markTaskCompleted(error: Option[Throwable]): Unit = {
     synchronized {
       if (completed) return

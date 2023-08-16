@@ -79,6 +79,8 @@ object TaskContext {
  * {{{
  *   org.apache.spark.TaskContext.get()
  * }}}
+ *
+ * 任务执行上下文
  */
 abstract class TaskContext extends Serializable {
   // Note: TaskContext must NOT define a get method. Otherwise it will prevent the Scala compiler

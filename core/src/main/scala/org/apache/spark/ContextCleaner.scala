@@ -65,6 +65,10 @@ private[spark] class ContextCleaner(
     sc: SparkContext,
     shuffleDriverComponents: ShuffleDriverComponents) extends Logging {
 
+  /*
+   * 用于清理那些超出应用范围的 RDD、Shuffle 对应的 map 任务状态、Shuffle 元数据、Broadcast 对象及 RDD 的 Checkpoint 数据
+   */
+
   /**
    * A buffer to ensure that `CleanupTaskWeakReference`s are not garbage collected as long as they
    * have not been handled by the reference queue.
@@ -128,6 +132,7 @@ private[spark] class ContextCleaner(
     cleaningThread.setDaemon(true)
     cleaningThread.setName("Spark Context Cleaner")
     cleaningThread.start()
+    // 主动 GC，默认每 30min 执行一次
     periodicGCService.scheduleAtFixedRate(() => System.gc(),
       periodicGCInterval, periodicGCInterval, TimeUnit.SECONDS)
   }

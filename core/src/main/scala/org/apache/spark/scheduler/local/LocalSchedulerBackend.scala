@@ -47,10 +47,10 @@ private case class StopExecutor()
  */
 private[spark] class LocalEndpoint(
     override val rpcEnv: RpcEnv,
-    userClassPath: Seq[URL],
+    userClassPath: Seq[URL], // 用户指定的 cp
     scheduler: TaskSchedulerImpl,
     executorBackend: LocalSchedulerBackend,
-    private val totalCores: Int)
+    private val totalCores: Int) // 用于执行任务的 CPU 核数，local 模式下固定为 1
   extends ThreadSafeRpcEndpoint with Logging {
 
   private var freeCores = totalCores
@@ -89,7 +89,9 @@ private[spark] class LocalEndpoint(
     val offers = IndexedSeq(new WorkerOffer(localExecutorId, localExecutorHostname, freeCores,
       Some(rpcEnv.address.hostPort)))
     for (task <- scheduler.resourceOffers(offers, true).flatten) {
+      // 资源分配
       freeCores -= scheduler.CPUS_PER_TASK
+      // 启动运行 Task
       executor.launchTask(executorBackend, task)
     }
   }
@@ -107,6 +109,7 @@ private[spark] class LocalSchedulerBackend(
   extends SchedulerBackend with ExecutorBackend with Logging {
 
   private val appId = "local-" + System.currentTimeMillis
+  // LocalEndpoint 的 RPC 客户端
   private var localEndpoint: RpcEndpointRef = null
   private val userClassPath = getUserClasspath(conf)
   private val listenerBus = scheduler.sc.listenerBus
@@ -125,6 +128,7 @@ private[spark] class LocalSchedulerBackend(
     userClassPathStr.map(_.split(File.pathSeparator)).toSeq.flatten.map(new File(_).toURI.toURL)
   }
 
+  // 连接 LauncherServer
   launcherBackend.connect()
 
   override def start(): Unit = {

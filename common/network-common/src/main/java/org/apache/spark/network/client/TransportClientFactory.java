@@ -17,15 +17,6 @@
 
 package org.apache.spark.network.client;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.codahale.metrics.MetricSet;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -39,12 +30,24 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import org.apache.spark.network.TransportContext;
+import org.apache.spark.network.server.TransportChannelHandler;
+import org.apache.spark.network.util.IOMode;
+import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.NettyMemoryMetrics;
+import org.apache.spark.network.util.NettyUtils;
+import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.TransportContext;
-import org.apache.spark.network.server.TransportChannelHandler;
-import org.apache.spark.network.util.*;
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Factory for creating {@link TransportClient}s by using createClient.
@@ -79,10 +82,12 @@ public class TransportClientFactory implements Closeable {
   private final TransportContext context;
   private final TransportConf conf;
   private final List<TransportClientBootstrap> clientBootstraps;
+  // 为每个目标连接地址维护一个 Client 池子
   private final ConcurrentHashMap<SocketAddress, ClientPool> connectionPool;
 
   /** Random number generator for picking connections between peers. */
   private final Random rand;
+  // 指定节点间的连接数
   private final int numConnectionsPerPeer;
 
   private final Class<? extends Channel> socketChannelClass;

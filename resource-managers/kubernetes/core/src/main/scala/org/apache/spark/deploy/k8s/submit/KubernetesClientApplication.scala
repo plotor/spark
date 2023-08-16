@@ -42,7 +42,9 @@ import org.apache.spark.util.Utils
  * @param driverArgs arguments to the driver
  */
 private[spark] case class ClientArguments(
+    // 任务 jar 文件路径，例如 local:///opt/spark/examples/jars/spark-examples_2.12-3.3.3.jar
     mainAppResource: MainAppResource,
+    // 驱动类，例如 org.apache.spark.examples.SparkPi
     mainClass: String,
     driverArgs: Array[String],
     proxyUser: Option[String])
@@ -100,8 +102,15 @@ private[spark] class Client(
     kubernetesClient: KubernetesClient,
     watcher: LoggingPodStatusWatcher) extends Logging {
 
+  /**
+   * 1. 构造 Driver 部署相关配置（ConfigMap、容器、Pod）
+   * 2. 请求 k8s 创建 driver pod
+   */
   def run(): Unit = {
+    // 构造 Driver 部署配置
     val resolvedDriverSpec = builder.buildFromFeatures(conf, kubernetesClient)
+
+    // 构造 ConfigMap，key 是文件名，value 是文件内容
     val configMapName = KubernetesClientUtils.configMapNameDriver
     val confFilesMap = KubernetesClientUtils.buildSparkConfDirFilesMap(configMapName,
       conf.sparkConf, resolvedDriverSpec.systemProperties)
@@ -110,6 +119,7 @@ private[spark] class Client(
 
     // The include of the ENV_VAR for "SPARK_CONF_DIR" is to allow for the
     // Spark command builder to pickup on the Java Options present in the ConfigMap
+    // 构造 Driver 容器配置
     val resolvedDriverContainer = new ContainerBuilder(resolvedDriverSpec.pod.container)
       .addNewEnv()
         .withName(ENV_SPARK_CONF_DIR)
@@ -120,6 +130,8 @@ private[spark] class Client(
         .withMountPath(SPARK_CONF_DIR_INTERNAL)
         .endVolumeMount()
       .build()
+
+    // 构建 Driver Pod 配置
     val resolvedDriverPod = new PodBuilder(resolvedDriverSpec.pod.pod)
       .editSpec()
         .addToContainers(resolvedDriverContainer)
@@ -149,7 +161,11 @@ private[spark] class Client(
     var watch: Watch = null
     var createdDriverPod: Pod = null
     try {
+      // 请求 k8s 创建 driver pod
       createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
+      if (log.isDebugEnabled) {
+        logDebug(s"Create driver pod $createdDriverPod")
+      }
     } catch {
       case NonFatal(e) =>
         kubernetesClient.resourceList(preKubernetesResources: _*).delete()
@@ -201,7 +217,7 @@ private[spark] class Client(
         }
       }
     }
-  }
+  } // end of run
 }
 
 /**
@@ -210,7 +226,9 @@ private[spark] class Client(
 private[spark] class KubernetesClientApplication extends SparkApplication {
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
+    // 解析命令行参数，封装成 ClientArguments 对象
     val parsedArguments = ClientArguments.fromCommandLineArgs(args)
+    // 基于 k8s client 创建 Driver pod，启动 Spark application
     run(parsedArguments, conf)
   }
 
@@ -219,7 +237,9 @@ private[spark] class KubernetesClientApplication extends SparkApplication {
     // to be added as a label to group resources belonging to the same application. Label values are
     // considerably restrictive, e.g. must be no longer than 63 characters in length. So we generate
     // a unique app ID (captured by spark.app.id) in the format below.
+    // 创建 applicationId
     val kubernetesAppId = KubernetesConf.getKubernetesAppId()
+    // 构造 Driver 运行配置
     val kubernetesConf = KubernetesConf.createDriverConf(
       sparkConf,
       kubernetesAppId,
@@ -232,20 +252,26 @@ private[spark] class KubernetesClientApplication extends SparkApplication {
     val master = KubernetesUtils.parseMasterUrl(sparkConf.get("spark.master"))
     val watcher = new LoggingPodStatusWatcherImpl(kubernetesConf)
 
-    Utils.tryWithResource(SparkKubernetesClientFactory.createKubernetesClient(
-      master,
-      Some(kubernetesConf.namespace),
-      KUBERNETES_AUTH_SUBMISSION_CONF_PREFIX,
-      SparkKubernetesClientFactory.ClientType.Submission,
-      sparkConf,
-      None,
-      None)) { kubernetesClient =>
-        val client = new Client(
-          kubernetesConf,
-          new KubernetesDriverBuilder(),
-          kubernetesClient,
-          watcher)
-        client.run()
+    Utils.tryWithResource(
+      // 创建 k8s 客户端 KubernetesClient 对象
+      SparkKubernetesClientFactory.createKubernetesClient(
+        master,
+        Some(kubernetesConf.namespace),
+        KUBERNETES_AUTH_SUBMISSION_CONF_PREFIX,
+        SparkKubernetesClientFactory.ClientType.Submission,
+        sparkConf,
+        None,
+        None)) { kubernetesClient =>
+      val client = new Client(
+        kubernetesConf,
+        new KubernetesDriverBuilder(),
+        kubernetesClient,
+        watcher)
+      /*
+       * 1. 构造 Driver 部署配置单（容器、ConfigMap、Pod）
+       * 2. 请求 k8s 创建 driver pod
+       */
+      client.run()
     }
   }
 }

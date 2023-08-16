@@ -17,15 +17,17 @@
 
 package org.apache.spark.network.util;
 
+import com.google.common.primitives.Ints;
+import io.netty.util.NettyRuntime;
+
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import com.google.common.primitives.Ints;
-import io.netty.util.NettyRuntime;
-
 /**
  * A central location that tracks all the settings we expose to users.
+ *
+ * 传输上下文配置信息
  */
 public class TransportConf {
 

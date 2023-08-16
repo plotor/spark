@@ -17,10 +17,10 @@
 
 package org.apache.spark.memory;
 
-import java.io.IOException;
-
 import org.apache.spark.unsafe.array.LongArray;
 import org.apache.spark.unsafe.memory.MemoryBlock;
+
+import java.io.IOException;
 
 /**
  * A memory consumer of {@link TaskMemoryManager} that supports spilling.
@@ -30,8 +30,10 @@ import org.apache.spark.unsafe.memory.MemoryBlock;
 public abstract class MemoryConsumer {
 
   protected final TaskMemoryManager taskMemoryManager;
+  // Page 大小
   private final long pageSize;
   private final MemoryMode mode;
+  // 已经使用的执行内存大小
   protected long used;
 
   protected MemoryConsumer(TaskMemoryManager taskMemoryManager, long pageSize, MemoryMode mode) {
@@ -75,6 +77,8 @@ public abstract class MemoryConsumer {
    *
    * Note: today, this only frees Tungsten-managed pages.
    *
+   * 架构数据溢写磁盘，以释放内存空间
+   *
    * @param size the amount of memory should be released
    * @param trigger the MemoryConsumer that trigger this spilling
    * @return the amount of released memory in bytes
@@ -86,6 +90,8 @@ public abstract class MemoryConsumer {
    * if Spark doesn't have enough memory for this allocation, or throw `TooLargePageException`
    * if this `LongArray` is too large to fit in a single page. The caller side should take care of
    * these two exceptions, or make sure the `size` is small enough that won't trigger exceptions.
+   *
+   * 分配指定大小的 long 数组
    *
    * @throws SparkOutOfMemoryError
    * @throws TooLargePageException
@@ -131,6 +137,8 @@ public abstract class MemoryConsumer {
 
   /**
    * Allocates memory of `size`.
+   *
+   * 获取指定大小的内存
    */
   public long acquireMemory(long size) {
     long granted = taskMemoryManager.acquireExecutionMemory(size, this);

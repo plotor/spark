@@ -87,10 +87,14 @@ abstract class AbstractSqlParser extends ParserInterface with SQLConfHelper with
 
   /** Creates LogicalPlan for a given SQL string. */
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
+    // 构建整棵语法树
     val ctx = parser.singleStatement()
     withOrigin(ctx, Some(sqlText)) {
+      // 基于 visitor 模式访问语法树
       astBuilder.visitSingleStatement(ctx) match {
+        // 正常解析
         case plan: LogicalPlan => plan
+        // 异常解析
         case _ =>
           val position = Origin(None, None)
           throw QueryParsingErrors.sqlStatementUnsupportedError(sqlText, position)
@@ -101,14 +105,19 @@ abstract class AbstractSqlParser extends ParserInterface with SQLConfHelper with
   /** Get the builder (visitor) which converts a ParseTree into an AST. */
   protected def astBuilder: AstBuilder
 
+  /**
+   * 构造 Antlr Parser，然后回调 toResult 函数
+   */
   protected def parse[T](command: String)(toResult: SqlBaseParser => T): T = {
     logDebug(s"Parsing command: $command")
 
+    // 创建此法解析器
     val lexer = new SqlBaseLexer(new UpperCaseCharStream(CharStreams.fromString(command)))
     lexer.removeErrorListeners()
     lexer.addErrorListener(ParseErrorListener)
 
     val tokenStream = new CommonTokenStream(lexer)
+    // 创建语法解析器
     val parser = new SqlBaseParser(tokenStream)
     parser.addParseListener(PostProcessor)
     parser.addParseListener(UnclosedCommentProcessor(command, tokenStream))
@@ -123,6 +132,7 @@ abstract class AbstractSqlParser extends ParserInterface with SQLConfHelper with
       try {
         // first, try parsing with potentially faster SLL mode
         parser.getInterpreter.setPredictionMode(PredictionMode.SLL)
+        // 执行 SQL 语法解析
         toResult(parser)
       }
       catch {

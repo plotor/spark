@@ -54,7 +54,7 @@ import org.apache.spark.util.Utils
  */
 class QueryExecution(
     val sparkSession: SparkSession,
-    val logical: LogicalPlan,
+    val logical: LogicalPlan, // 未解析的 LogicalPlan
     val tracker: QueryPlanningTracker = new QueryPlanningTracker,
     val mode: CommandExecutionMode.Value = CommandExecutionMode.ALL) extends Logging {
 
@@ -63,6 +63,7 @@ class QueryExecution(
   // TODO: Move the planner an optimizer into here from SessionState.
   protected def planner = sparkSession.sessionState.planner
 
+  // 触发执行解析 Unresolved LogicalPlan
   def assertAnalyzed(): Unit = analyzed
 
   def assertSupported(): Unit = {
@@ -71,8 +72,10 @@ class QueryExecution(
     }
   }
 
+  // 解析后的 LogicalPlan
   lazy val analyzed: LogicalPlan = executePhase(QueryPlanningTracker.ANALYSIS) {
     // We can't clone `logical` here, which will reset the `_analyzed` flag.
+    // 解析 Unresolved LogicalPlan
     sparkSession.sessionState.analyzer.executeAndCheck(logical, tracker)
   }
 
@@ -115,6 +118,7 @@ class QueryExecution(
 
   def assertCommandExecuted(): Unit = commandExecuted
 
+  // 优化后的 LogicalPlan
   lazy val optimizedPlan: LogicalPlan = {
     // We need to materialize the commandExecuted here because optimizedPlan is also tracked under
     // the optimizing phase
@@ -122,8 +126,7 @@ class QueryExecution(
     executePhase(QueryPlanningTracker.OPTIMIZATION) {
       // clone the plan to avoid sharing the plan instance between different stages like analyzing,
       // optimizing and planning.
-      val plan =
-        sparkSession.sessionState.optimizer.executeAndTrack(withCachedData.clone(), tracker)
+      val plan = sparkSession.sessionState.optimizer.executeAndTrack(withCachedData.clone(), tracker)
       // We do not want optimized plans to be re-analyzed as literals that have been constant
       // folded and such can cause issues during analysis. While `clone` should maintain the
       // `analyzed` state of the LogicalPlan, we set the plan as analyzed here as well out of
@@ -135,17 +138,19 @@ class QueryExecution(
 
   private def assertOptimized(): Unit = optimizedPlan
 
+  // Spark 物理执行计划
   lazy val sparkPlan: SparkPlan = {
     // We need to materialize the optimizedPlan here because sparkPlan is also tracked under
     // the planning phase
     assertOptimized()
     executePhase(QueryPlanningTracker.PLANNING) {
-      // Clone the logical plan here, in case the planner rules change the states of the logical
-      // plan.
+      // 将 Optimized LogicalPlan 转换成 SparkPlan
+      // Clone the logical plan here, in case the planner rules change the states of the logical plan.
       QueryExecution.createSparkPlan(sparkSession, planner, optimizedPlan.clone())
     }
   }
 
+  // Prepared 物理执行计划，这一步的 plan 才开始可以真正被执行
   // executedPlan should not be used to initialize any SparkPlan. It should be
   // only used for execution.
   lazy val executedPlan: SparkPlan = {
@@ -170,6 +175,7 @@ class QueryExecution(
    * use `Dataset.rdd` instead where conversion will be applied.
    */
   lazy val toRdd: RDD[InternalRow] = new SQLExecutionRDD(
+    // 执行物理计划
     executedPlan.execute(), sparkSession.sessionState.conf)
 
   /** Get the metrics observed during the execution of the query plan. */
@@ -177,7 +183,7 @@ class QueryExecution(
 
   protected def preparations: Seq[Rule[SparkPlan]] = {
     QueryExecution.preparations(sparkSession,
-      Option(InsertAdaptiveSparkPlan(AdaptiveExecutionContext(sparkSession, this))), false)
+      Option(InsertAdaptiveSparkPlan(AdaptiveExecutionContext(sparkSession, this))), subquery = false)
   }
 
   protected def executePhase[T](phase: String)(block: => T): T = sparkSession.withActive {
@@ -408,8 +414,10 @@ object QueryExecution {
     Seq(
       CoalesceBucketsInJoin,
       PlanDynamicPruningFilters(sparkSession),
+      // 处理特殊子查询
       PlanSubqueries(sparkSession),
       RemoveRedundantProjects,
+      // 确保执行计划分区与排序的正确性
       EnsureRequirements(),
       // `ReplaceHashWithSortAgg` needs to be added after `EnsureRequirements` to guarantee the
       // sort order of each node is checked to be valid.
@@ -420,10 +428,12 @@ object QueryExecution {
       DisableUnnecessaryBucketedScan,
       ApplyColumnarRulesAndInsertTransitions(
         sparkSession.sessionState.columnarRules, outputsColumnar = false),
+      // Codegen 相关
       CollapseCodegenStages()) ++
       (if (subquery) {
         Nil
       } else {
+        // 重用 Exchange 节点和子查询
         Seq(ReuseExchangeAndSubquery)
       })
   }
@@ -436,6 +446,7 @@ object QueryExecution {
       preparations: Seq[Rule[SparkPlan]],
       plan: SparkPlan): SparkPlan = {
     val planChangeLogger = new PlanChangeLogger[SparkPlan]()
+    // 遍历对 SparkPlan 应该各个 Rule
     val preparedPlan = preparations.foldLeft(plan) { case (sp, rule) =>
       val result = rule.apply(sp)
       planChangeLogger.logRule(rule.ruleName, sp, result)
@@ -456,6 +467,7 @@ object QueryExecution {
       plan: LogicalPlan): SparkPlan = {
     // TODO: We use next(), i.e. take the first plan returned by the planner, here for now,
     //       but we will implement to choose the best plan.
+    // 现阶段只是从 Iterator[SparkPlan] 中简单选择第一个作为最终的 SparkPlan
     planner.plan(ReturnAnswer(plan)).next()
   }
 

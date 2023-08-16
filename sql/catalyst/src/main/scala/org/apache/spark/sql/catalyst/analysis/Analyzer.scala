@@ -207,10 +207,14 @@ class Analyzer(override val catalogManager: CatalogManager)
   }
 
   def executeAndCheck(plan: LogicalPlan, tracker: QueryPlanningTracker): LogicalPlan = {
+    // 已经是 Analyzed LogicalPlan，直接返回
     if (plan.analyzed) return plan
+
     AnalysisHelper.markInAnalyzer {
+      // 执行解析，得到 Analyzed LogicalPlan
       val analyzed = executeAndTrack(plan, tracker)
       try {
+        // 对 Analyzed LogicalPlan 进行校验
         checkAnalysis(analyzed)
         analyzed
       } catch {
@@ -238,6 +242,7 @@ class Analyzer(override val catalogManager: CatalogManager)
    */
   protected def fixedPoint =
     FixedPoint(
+      // 对应 spark.sql.analyzer.maxIterations 配置，默认为 100
       conf.analyzerMaxIterations,
       errorOnExceed = true,
       maxIterationsSetting = SQLConf.ANALYZER_MAX_ITERATIONS.key)
@@ -261,15 +266,20 @@ class Analyzer(override val catalogManager: CatalogManager)
   }
 
   override def batches: Seq[Batch] = Seq(
+    // 替换操作
     Batch("Substitution", fixedPoint,
       // This rule optimizes `UpdateFields` expression chains so looks more like optimization rule.
       // However, when manipulating deeply nested schema, `UpdateFields` expression tree could be
       // very complex and make analysis impossible. Thus we need to optimize `UpdateFields` early
       // at the beginning of analysis.
       OptimizeUpdateFields,
+      // 处理 With 子句
       CTESubstitution,
+      // 处理窗口函数表达式
       WindowsSubstitution,
+      // 消除只有一个子节点的 Union 操作
       EliminateUnions,
+      // 让 Group By 或 Order By 支持常数下标，该规则用于将常数替换成具体的列名
       SubstituteUnresolvedOrdinals),
     Batch("Disable Hints", Once,
       new ResolveHints.DisableHints),
@@ -280,42 +290,66 @@ class Analyzer(override val catalogManager: CatalogManager)
       LookupFunctions),
     Batch("Keep Legacy Outputs", Once,
       KeepLegacyOutputs),
+    // 典型规则
     Batch("Resolution", fixedPoint,
+      // 解析可以作为数据表的函数
       ResolveTableValuedFunctions(v1SessionCatalog) ::
       ResolveNamespace(catalogManager) ::
       new ResolveCatalogs(catalogManager) ::
       ResolveUserSpecifiedColumns ::
       ResolveInsertInto ::
+      // 解析数据表
       ResolveRelations ::
       ResolvePartitionSpec ::
       ResolveFieldNameAndPosition ::
       AddMetadataColumns ::
       DeduplicateRelations ::
+      // 解析列
       ResolveReferences ::
       ResolveExpressionsWithNamePlaceholders ::
+      // 解析结构体创建
       ResolveDeserializer ::
+      // 解析新的实例
       ResolveNewInstance ::
+      // 解析类型转换
       ResolveUpCast ::
+      // 解析多维分析
       ResolveGroupingAnalytics ::
+      // 解析 pivot
       ResolvePivot ::
+      // 解析下标聚合
       ResolveOrdinalInOrderByAndGroupBy ::
       ResolveAggAliasInGroupBy ::
+      // 解析新的列
       ResolveMissingReferences ::
+      // 解析生成器
       ExtractGenerator ::
+      // 解析生成过程
       ResolveGenerate ::
+      // 解析函数
       ResolveFunctions ::
+      // 解析别名
       ResolveAliases ::
+      // 解析子查询
       ResolveSubquery ::
       ResolveSubqueryColumnAliases ::
+      // 解析窗口函数排序
       ResolveWindowOrder ::
+      // 解析窗口函数
       ResolveWindowFrame ::
+      // 解析自然 JOIN
       ResolveNaturalAndUsingJoin ::
       ResolveOutputRelation ::
+      // 提取窗口函数表达式
       ExtractWindowExpressions ::
+      // 解析全局聚合
       GlobalAggregates ::
+      // 解析聚合函数
       ResolveAggregateFunctions ::
+      // 解析时间窗口
       TimeWindowing ::
       SessionWindowing ::
+      // 解析内联表
       ResolveInlineTables ::
       ResolveLambdaVariables ::
       ResolveTimeZone ::
@@ -323,8 +357,10 @@ class Analyzer(override val catalogManager: CatalogManager)
       ResolveBinaryArithmetic ::
       ResolveUnion ::
       RewriteDeleteFromTable ::
+      // 解析强制类型转换
       typeCoercionRules ++
       Seq(ResolveWithCTE) ++
+      // 扩展规则
       extendedResolutionRules : _*),
     Batch("Remove TempResolvedColumn", Once, RemoveTempResolvedColumn),
     Batch("Apply Char Padding", Once,
@@ -335,6 +371,8 @@ class Analyzer(override val catalogManager: CatalogManager)
     Batch("Remove Unresolved Hints", Once,
       new ResolveHints.RemoveAllHints),
     Batch("Nondeterministic", Once,
+      // 将LogicalPlan中非Project或非Filter算子的 non-deterministic（不确定的）表达式提取出来，
+      // 然后将这些表达式放在内层的Project算子中或最终的Project算子中。
       PullOutNondeterministic),
     Batch("UDF", Once,
       HandleNullInputsForUDF,
@@ -344,6 +382,7 @@ class Analyzer(override val catalogManager: CatalogManager)
     Batch("Subquery", Once,
       UpdateOuterReferences),
     Batch("Cleanup", fixedPoint,
+      // 用来删除LogicalPlan中无用的别名信息
       CleanupAliases),
     Batch("HandleAnalysisOnlyCommand", Once,
       HandleAnalysisOnlyCommand)

@@ -30,6 +30,7 @@ import org.apache.spark.util.CallSite
 private[spark] class ResultStage(
     id: Int,
     rdd: RDD[_],
+    // 用于对 RDD 分区进行计算的函数
     val func: (TaskContext, Iterator[_]) => _,
     val partitions: Array[Int],
     parents: List[Stage],

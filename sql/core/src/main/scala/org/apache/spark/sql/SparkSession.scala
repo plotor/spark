@@ -617,8 +617,10 @@ class SparkSession private(
   def sql(sqlText: String): DataFrame = withActive {
     val tracker = new QueryPlanningTracker
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
+      // 解析 SQL，基于 Antlr 生成 Unresolved LogicalPlan
       sessionState.sqlParser.parsePlan(sqlText)
     }
+    //
     Dataset.ofRows(self, plan, tracker)
   }
 

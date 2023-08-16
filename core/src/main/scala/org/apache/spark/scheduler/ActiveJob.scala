@@ -40,7 +40,7 @@ import org.apache.spark.util.CallSite
  * @param listener A listener to notify if tasks in this job finish or the job fails.
  * @param properties Scheduling properties attached to the job, such as fair scheduler pool name.
  */
-private[spark] class ActiveJob(
+private[spark] class ActiveJob( // 已经激活的 Job
     val jobId: Int,
     val finalStage: Stage,
     val callSite: CallSite,
@@ -57,8 +57,9 @@ private[spark] class ActiveJob(
   }
 
   /** Which partitions of the stage have finished */
-  val finished = Array.fill[Boolean](numPartitions)(false)
+  val finished = Array.fill[Boolean](numPartitions)(false) // 标识对应分区是否已经被处理完成
 
+  // 已经完成的 Task 数目
   var numFinished = 0
 
   /** Resets the status of all partitions in this stage so they are marked as not finished. */

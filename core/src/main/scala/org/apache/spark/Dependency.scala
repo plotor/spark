@@ -37,6 +37,7 @@ import org.apache.spark.util.Utils
  */
 @DeveloperApi
 abstract class Dependency[T] extends Serializable {
+  // 返回当前依赖的前置 RDD
   def rdd: RDD[T]
 }
 
@@ -50,10 +51,11 @@ abstract class Dependency[T] extends Serializable {
 abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
   /**
    * Get the parent partitions for a child partition.
+   *
    * @param partitionId a partition of the child RDD
    * @return the partitions of the parent RDD that the child partition depends upon
    */
-  def getParents(partitionId: Int): Seq[Int]
+  def getParents(partitionId: Int): Seq[Int] // 获取指定分区所有父分区集合
 
   override def rdd: RDD[T] = _rdd
 }
@@ -79,9 +81,9 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
     @transient private val _rdd: RDD[_ <: Product2[K, V]],
     val partitioner: Partitioner,
     val serializer: Serializer = SparkEnv.get.serializer,
-    val keyOrdering: Option[Ordering[K]] = None,
-    val aggregator: Option[Aggregator[K, V, C]] = None,
-    val mapSideCombine: Boolean = false,
+    val keyOrdering: Option[Ordering[K]] = None, // key 排序规则
+    val aggregator: Option[Aggregator[K, V, C]] = None, // 聚合器
+    val mapSideCombine: Boolean = false, // 是否预聚合
     val shuffleWriterProcessor: ShuffleWriteProcessor = new ShuffleWriteProcessor)
   extends Dependency[Product2[K, V]] with Logging {
 
@@ -97,6 +99,7 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
   private[spark] val combinerClassName: Option[String] =
     Option(reflect.classTag[C]).map(_.runtimeClass.getName)
 
+  // shuffle 标识
   val shuffleId: Int = _rdd.context.newShuffleId()
 
   val shuffleHandle: ShuffleHandle = _rdd.context.env.shuffleManager.registerShuffle(
@@ -235,6 +238,7 @@ class RangeDependency[T](rdd: RDD[T], inStart: Int, outStart: Int, length: Int)
 
   override def getParents(partitionId: Int): List[Int] = {
     if (partitionId >= outStart && partitionId < outStart + length) {
+      // 仍然是一对一的关系
       List(partitionId - outStart + inStart)
     } else {
       Nil

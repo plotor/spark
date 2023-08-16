@@ -125,12 +125,18 @@ abstract class Expression extends TreeNode[Expression] {
 
   def references: AttributeSet = _references
 
-  /** Returns the result of evaluating this expression on a given input Row */
+  /**
+   * Returns the result of evaluating this expression on a given input Row
+   *
+   * 实现了表达式对应的处理逻辑
+   */
   def eval(input: InternalRow = null): Any
 
   /**
    * Returns an [[ExprCode]], that contains the Java source code to generate the result of
    * evaluating the expression on an input row.
+   *
+   * 生成表达式对应的 java 代码
    *
    * @param ctx a [[CodegenContext]]
    * @return [[ExprCode]]

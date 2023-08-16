@@ -680,6 +680,7 @@ package object config {
     .timeConf(TimeUnit.MILLISECONDS)
     .createWithDefaultString("3s")
 
+  // 是否启用 ESS
   private[spark] val SHUFFLE_SERVICE_ENABLED =
     ConfigBuilder("spark.shuffle.service.enabled")
       .version("1.2.0")

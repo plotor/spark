@@ -26,6 +26,7 @@ import org.apache.spark.internal.config.Tests.IS_TESTING
  * For JDK9+, JDK major version number is added to the file names to distinguish the results.
  */
 abstract class BenchmarkBase {
+
   var output: Option[OutputStream] = None
 
   /**

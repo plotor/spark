@@ -32,12 +32,16 @@ private[spark] trait SchedulerBackend {
   def stop(): Unit
   /**
    * Update the current offers and schedule tasks
+   *
+   * 给调度池中的所有 Task 分配资源
    */
   def reviveOffers(): Unit
   def defaultParallelism(): Int
 
   /**
    * Requests that an executor kills a running task.
+   *
+   * 请求 Executor Kill 指定的 Task
    *
    * @param taskId Id of the task.
    * @param executorId Id of the executor the task is running on.

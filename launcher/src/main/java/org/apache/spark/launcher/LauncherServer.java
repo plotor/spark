@@ -77,6 +77,8 @@ import static org.apache.spark.launcher.LauncherProtocol.*;
  * that communicates with the server. In cluster mode, this means that the client that launches the
  * application must remain alive for the duration of the application (or until the app handle is
  * disconnected).
+ *
+ * 当Spark应用程序没有在用户应用程序中运行，而是运行在单独的进程中时，用户可以在用户应用程序中使用LauncherServer与Spark应用程序通信
  */
 class LauncherServer implements Closeable {
 

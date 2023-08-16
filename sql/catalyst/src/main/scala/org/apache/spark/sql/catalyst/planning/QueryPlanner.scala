@@ -53,6 +53,7 @@ abstract class GenericStrategy[PhysicalPlan <: TreeNode[PhysicalPlan]] extends L
  * @tparam PhysicalPlan The type of physical plan produced by this [[QueryPlanner]]
  */
 abstract class QueryPlanner[PhysicalPlan <: TreeNode[PhysicalPlan]] {
+
   /** A list of execution strategies that can be used by the planner */
   def strategies: Seq[GenericStrategy[PhysicalPlan]]
 
@@ -60,20 +61,27 @@ abstract class QueryPlanner[PhysicalPlan <: TreeNode[PhysicalPlan]] {
     // Obviously a lot to do here still...
 
     // Collect physical plan candidates.
-    val candidates = strategies.iterator.flatMap(_(plan))
+    // 1. 遍历并应用各 Strategy 到 LogicalPlan，生成物理执行计划候选集合
+    val candidates: Iterator[PhysicalPlan] = strategies.iterator.flatMap(_(plan))
+
+    /*
+     * 2. 如果物理执行计划集合中存在 PlanLater 类型的 SparkPlan 替换成对应的 LogicalPlan，
+     *    然后递归调用 plan 方法将 LogicalPlan 转换成 SparkPlan
+     */
 
     // The candidates may contain placeholders marked as [[planLater]],
     // so try to replace them by their child plans.
     val plans = candidates.flatMap { candidate =>
+      // 检查当前 SparkPlan 中是否存在 PlanLater 节点
       val placeholders = collectPlaceholders(candidate)
-
       if (placeholders.isEmpty) {
         // Take the candidate as is because it does not contain placeholders.
         Iterator(candidate)
-      } else {
+      } else { // 处理 PlanLater
         // Plan the logical plan marked as [[planLater]] and replace the placeholders.
         placeholders.iterator.foldLeft(Iterator(candidate)) {
           case (candidatesWithPlaceholders, (placeholder, logicalPlan)) =>
+            // 获取 PlanLater 对应的 LogicalPlan，并递归调用 plan 方法将其转换成 SparkPlan
             // Plan the logical plan for the placeholder.
             val childPlans = this.plan(logicalPlan)
 
@@ -89,6 +97,7 @@ abstract class QueryPlanner[PhysicalPlan <: TreeNode[PhysicalPlan]] {
       }
     }
 
+    // 3. 裁剪掉一些不够高效的物理计划，目前并未实现相应策略
     val pruned = prunePlans(plans)
     assert(pruned.hasNext, s"No plan for $plan")
     pruned

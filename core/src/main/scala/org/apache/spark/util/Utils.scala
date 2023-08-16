@@ -935,6 +935,7 @@ private[spark] object Utils extends Logging {
    * logic of locating the local directories according to deployment mode.
    */
   def getConfiguredLocalDirs(conf: SparkConf): Array[String] = {
+    // 是否启用 ESS
     val shuffleServiceEnabled = conf.get(config.SHUFFLE_SERVICE_ENABLED)
     if (isRunningInYarnContainer(conf)) {
       // If we are in yarn mode, systems can have different disk layouts so we must set it
@@ -2719,8 +2720,11 @@ private[spark] object Utils extends Logging {
 
   /**
    * Return whether dynamic allocation is enabled in the given conf.
+   *
+   * 是否启用 dynamic allocation
    */
   def isDynamicAllocationEnabled(conf: SparkConf): Boolean = {
+    // spark.dynamicAllocation.enabled
     val dynamicAllocationEnabled = conf.get(DYN_ALLOCATION_ENABLED)
     dynamicAllocationEnabled &&
       (!isLocalMaster(conf) || conf.get(DYN_ALLOCATION_TESTING))

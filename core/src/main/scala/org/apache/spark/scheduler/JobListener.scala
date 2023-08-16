@@ -23,6 +23,13 @@ package org.apache.spark.scheduler
  * job fails (and no further taskSucceeded events will happen).
  */
 private[spark] trait JobListener {
+
+  /*
+   * JobListener 有 JobWaiter 和 ApproximateActionListener 两个实现：
+   * - JobWaiter 用于等待整个 Job 执行完毕，然后调用给定的处理函数对返回结果进行处理。
+   * - ApproximateActionListener 只对有单一返回结果的 Action（如 count() 和非并行的 reduce()）进行监听。
+   */
+
   def taskSucceeded(index: Int, result: Any): Unit
   def jobFailed(exception: Exception): Unit
 }

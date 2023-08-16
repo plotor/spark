@@ -26,7 +26,9 @@ import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
 private sealed trait OutputCommitCoordinationMessage extends Serializable
 
+// 此请求用于触发停止 OutputCommitCoordinatorEndpoint
 private case object StopCoordinator extends OutputCommitCoordinationMessage
+// 此请求用于确认客户端是否有权限将输出提交给 HDFS
 private case class AskPermissionToCommitOutput(
     stage: Int,
     stageAttempt: Int,
@@ -43,10 +45,13 @@ private case class AskPermissionToCommitOutput(
  *
  * This class was introduced in SPARK-4879; see that JIRA issue (and the associated pull requests)
  * for an extensive design discussion.
+ *
+ * 决定任务是否可以提交输出给 HDFS
  */
 private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean) extends Logging {
 
   // Initialized by SparkEnv
+  // OutputCommitCoordinatorEndpoint RPC 客户端
   var coordinatorRef: Option[RpcEndpointRef] = None
 
   // Class used to identify a committer. The task ID for a committer is implicitly defined by
@@ -100,6 +105,7 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
     val msg = AskPermissionToCommitOutput(stage, stageAttempt, partition, attemptNumber)
     coordinatorRef match {
       case Some(endpointRef) =>
+        // 发送 AskPermissionToCommitOutput 请求
         ThreadUtils.awaitResult(endpointRef.ask[Boolean](msg),
           RpcUtils.askRpcTimeout(conf).duration)
       case None =>
@@ -170,6 +176,7 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
     }
   }
 
+  // 用于确认客户端是否有权限将输出提交给 HDFS
   // Marked private[scheduler] instead of private so this can be mocked in tests
   private[scheduler] def handleAskPermissionToCommit(
       stage: Int,

@@ -36,6 +36,8 @@ import org.apache.spark.util.{SerializableConfiguration, Utils}
 
 /**
  * An RDD that reads from checkpoint files previously written to reliable storage.
+ *
+ * 基于 HDFS 做 checkpoint
  */
 private[spark] class ReliableCheckpointRDD[T: ClassTag](
     sc: SparkContext,
@@ -46,6 +48,7 @@ private[spark] class ReliableCheckpointRDD[T: ClassTag](
   @transient private val hadoopConf = sc.hadoopConfiguration
   @transient private val cpath = new Path(checkpointPath)
   @transient private val fs = cpath.getFileSystem(hadoopConf)
+  // 对 hadoopConf 进行 Broadcast
   private val broadcastedConf = sc.broadcast(new SerializableConfiguration(hadoopConf))
 
   // Fail fast if checkpoint directory does not exist

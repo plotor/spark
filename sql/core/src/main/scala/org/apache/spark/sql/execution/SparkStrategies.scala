@@ -53,6 +53,10 @@ abstract class SparkStrategy extends GenericStrategy[SparkPlan] {
   override protected def planLater(plan: LogicalPlan): SparkPlan = PlanLater(plan)
 }
 
+/**
+ * 在SparkPlanner的调用逻辑和各种策略中，PlanLater随处可见。根据其实现，PlanLater本身也是SparkPlan的一种，
+ * 区别在于doExecute()方法没有实现，表示不支持执行，所起到的作用仅仅是占位，等待后续步骤处理。
+ */
 case class PlanLater(plan: LogicalPlan) extends LeafExecNode {
 
   override def output: Seq[Attribute] = plan.output

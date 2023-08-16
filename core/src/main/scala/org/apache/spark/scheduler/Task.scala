@@ -89,9 +89,11 @@ private[spark] abstract class Task[T](
 
     require(cpus > 0, "CPUs per task should be > 0")
 
+    // 向 BlockManager 注册本次任务尝试
     SparkEnv.get.blockManager.registerTask(taskAttemptId)
     // TODO SPARK-24874 Allow create BarrierTaskContext based on partitions, instead of whether
     // the stage is barrier.
+    // 创建任务执行上下文对象
     val taskContext = new TaskContextImpl(
       stageId,
       stageAttemptId, // stageAttemptId and stageAttemptNumber are semantically equal
@@ -115,10 +117,12 @@ private[spark] abstract class Task[T](
     TaskContext.setTaskContext(context)
     taskThread = Thread.currentThread()
 
+    // 尝试 kill Task
     if (_reasonIfKilled != null) {
       kill(interruptThread = false, _reasonIfKilled)
     }
 
+    // 如果启用的话，创建调用者上下文
     new CallerContext(
       "TASK",
       SparkEnv.get.conf.get(APP_CALLER_CONTEXT),
@@ -130,9 +134,11 @@ private[spark] abstract class Task[T](
       Option(taskAttemptId),
       Option(attemptNumber)).setCurrentContext()
 
+    // 执行所有在册 Plugin 的 onTaskStart 方法
     plugins.foreach(_.onTaskStart())
 
     try {
+      // 执行 Task
       runTask(context)
     } catch {
       case e: Throwable =>
@@ -183,6 +189,7 @@ private[spark] abstract class Task[T](
 
   def runTask(context: TaskContext): T
 
+  // 当前 Task 的位置偏好信息
   def preferredLocations: Seq[TaskLocation] = Nil
 
   // Map output tracker epoch. Will be set by TaskSetManager.
@@ -192,13 +199,16 @@ private[spark] abstract class Task[T](
   @transient var context: TaskContext = _
 
   // The actual Thread on which the task is running, if any. Initialized in run().
+  // 运行当前 Task 尝试的线程
   @volatile @transient private var taskThread: Thread = _
 
   // If non-null, this task has been killed and the reason is as specified. This is used in case
   // context is not yet initialized when kill() is invoked.
   @volatile @transient private var _reasonIfKilled: String = null
 
+  // 对 RDD 进行反序列化的时间开销
   protected var _executorDeserializeTimeNs: Long = 0
+  // 对 RDD 进行反序列化的 CPU 时间开销
   protected var _executorDeserializeCpuTime: Long = 0
 
   /**

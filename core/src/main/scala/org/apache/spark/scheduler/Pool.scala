@@ -30,6 +30,7 @@ import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
  */
 private[spark] class Pool(
     val poolName: String,
+    // 调度模式
     val schedulingMode: SchedulingMode,
     initMinShare: Int,
     initWeight: Int)
@@ -39,14 +40,18 @@ private[spark] class Pool(
   val schedulableNameToSchedulable = new ConcurrentHashMap[String, Schedulable]
   val weight = initWeight
   val minShare = initMinShare
+  // 正在运行的任务数
   var runningTasks = 0
+  // 调度优先级
   val priority = 0
 
   // A pool's stage id is used to break the tie in scheduling.
   var stageId = -1
   val name = poolName
+  // 父 Pool
   var parent: Pool = null
 
+  // 获取调度模式对应的算法实例
   private val taskSetSchedulingAlgorithm: SchedulingAlgorithm = {
     schedulingMode match {
       case SchedulingMode.FAIR =>
@@ -86,6 +91,9 @@ private[spark] class Pool(
     null
   }
 
+  /**
+   * 如果某个 Executor 异常，则需要将其上的 Task 标识已完成，并重新提交执行
+   */
   override def executorLost(executorId: String, host: String, reason: ExecutorLossReason): Unit = {
     schedulableQueue.asScala.foreach(_.executorLost(executorId, host, reason))
   }

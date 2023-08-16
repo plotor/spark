@@ -28,6 +28,7 @@ private[spark] class KubernetesDriverBuilder {
   def buildFromFeatures(
       conf: KubernetesDriverConf,
       client: KubernetesClient): KubernetesDriverSpec = {
+    // 加载 podTemplateFile 配置
     val initialPod = conf.get(Config.KUBERNETES_DRIVER_PODTEMPLATE_FILE)
       .map { file =>
         KubernetesUtils.loadPodFromTemplate(
@@ -38,6 +39,7 @@ private[spark] class KubernetesDriverBuilder {
       }
       .getOrElse(SparkPod.initialPod())
 
+    // 用户自定义实现的 feature step
     val userFeatures = conf.get(Config.KUBERNETES_DRIVER_POD_FEATURE_STEPS)
       .map { className =>
         val feature = Utils.classForName[Any](className).getConstructor().newInstance()
@@ -62,6 +64,7 @@ private[spark] class KubernetesDriverBuilder {
         }
       }
 
+    // 内置的 Feature Step 在前，用户自定义的在后
     val features = Seq(
       new BasicDriverFeatureStep(conf),
       new DriverKubernetesCredentialsFeatureStep(conf),

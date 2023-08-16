@@ -30,7 +30,7 @@ import javax.annotation.concurrent.GuardedBy
 private[memory] abstract class MemoryPool(lock: Object) {
 
   @GuardedBy("lock")
-  private[this] var _poolSize: Long = 0
+  private[this] var _poolSize: Long = 0 // 内存池大小，单位：字节
 
   /**
    * Returns the current size of the pool, in bytes.
@@ -48,6 +48,8 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Expands the pool by `delta` bytes.
+   *
+   * 扩容 delta 字节
    */
   final def incrementPoolSize(delta: Long): Unit = lock.synchronized {
     require(delta >= 0)
@@ -56,6 +58,8 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Shrinks the pool by `delta` bytes.
+   *
+   * 缩容 delta 字节
    */
   final def decrementPoolSize(delta: Long): Unit = lock.synchronized {
     require(delta >= 0)

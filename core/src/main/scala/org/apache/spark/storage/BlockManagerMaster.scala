@@ -29,8 +29,10 @@ import org.apache.spark.storage.BlockManagerMessages._
 import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
 private[spark]
-class BlockManagerMaster(
+class BlockManagerMaster( // 管理集群内 Driver 和 Executor 的 BlockManager
+    // 对应 BlockManagerMasterEndpoint 的 RPC 客户端（不管是 Driver 还是 Executor）
     var driverEndpoint: RpcEndpointRef,
+    // 对应 BlockManagerMasterHeartbeatEndpoint 的 RPC 客户端（不管是 Driver 还是 Executor）
     var driverHeartbeatEndPoint: RpcEndpointRef,
     conf: SparkConf,
     isDriver: Boolean)
@@ -68,6 +70,8 @@ class BlockManagerMaster(
    * Register the BlockManager's id with the driver. The input BlockManagerId does not contain
    * topology information. This information is obtained from the master and we respond with an
    * updated BlockManagerId fleshed out with this information.
+   *
+   * 向 Driver 注册 BlockManagerId，响应中会填充 topologyInfo
    */
   def registerBlockManager(
       id: BlockManagerId,
@@ -77,6 +81,7 @@ class BlockManagerMaster(
       storageEndpoint: RpcEndpointRef,
       isReRegister: Boolean = false): BlockManagerId = {
     logInfo(s"Registering BlockManager $id")
+    // 向 Driver 发送 RegisterBlockManager 请求，以注册自己的 BlockManager
     val updatedId = driverEndpoint.askSync[BlockManagerId](
       RegisterBlockManager(
         id,
@@ -102,6 +107,7 @@ class BlockManagerMaster(
       storageLevel: StorageLevel,
       memSize: Long,
       diskSize: Long): Boolean = {
+    // 向 Driver 发送 UpdateBlockInfo 请求以更新其记录的当前 blockManagerId 的信息
     val res = driverEndpoint.askSync[Boolean](
       UpdateBlockInfo(blockManagerId, blockId, storageLevel, memSize, diskSize))
     logDebug(s"Updated info of block $blockId")

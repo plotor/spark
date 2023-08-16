@@ -17,15 +17,14 @@
 
 package org.apache.spark.rpc
 
+import org.apache.spark.rpc.netty.NettyRpcEnvFactory
+import org.apache.spark.util.RpcUtils
+import org.apache.spark.{SecurityManager, SparkConf}
+
 import java.io.File
 import java.net.URI
 import java.nio.channels.ReadableByteChannel
-
 import scala.concurrent.Future
-
-import org.apache.spark.{SecurityManager, SparkConf}
-import org.apache.spark.rpc.netty.NettyRpcEnvFactory
-import org.apache.spark.util.RpcUtils
 
 
 /**
@@ -35,26 +34,25 @@ import org.apache.spark.util.RpcUtils
 private[spark] object RpcEnv {
 
   def create(
-      name: String,
-      host: String,
-      port: Int,
-      conf: SparkConf,
-      securityManager: SecurityManager,
-      clientMode: Boolean = false): RpcEnv = {
+              name: String,
+              host: String,
+              port: Int,
+              conf: SparkConf,
+              securityManager: SecurityManager,
+              clientMode: Boolean = false): RpcEnv = {
     create(name, host, host, port, conf, securityManager, 0, clientMode)
   }
 
   def create(
-      name: String,
-      bindAddress: String,
-      advertiseAddress: String,
-      port: Int,
-      conf: SparkConf,
-      securityManager: SecurityManager,
-      numUsableCores: Int,
-      clientMode: Boolean): RpcEnv = {
-    val config = RpcEnvConfig(conf, name, bindAddress, advertiseAddress, port, securityManager,
-      numUsableCores, clientMode)
+              name: String,
+              bindAddress: String,
+              advertiseAddress: String,
+              port: Int,
+              conf: SparkConf,
+              securityManager: SecurityManager,
+              numUsableCores: Int,
+              clientMode: Boolean): RpcEnv = {
+    val config = RpcEnvConfig(conf, name, bindAddress, advertiseAddress, port, securityManager, numUsableCores, clientMode)
     new NettyRpcEnvFactory().create(config)
   }
 }
@@ -181,7 +179,7 @@ private[spark] trait RpcEnvFileServer {
    *
    * @param baseUri Leading URI path (files can be retrieved by appending their relative
    *                path to this base URI). This cannot be "files" nor "jars".
-   * @param path Path to the local directory.
+   * @param path    Path to the local directory.
    * @return URI for the root of the directory in the file server.
    */
   def addDirectory(baseUri: String, path: File): String
@@ -198,11 +196,12 @@ private[spark] trait RpcEnvFileServer {
 }
 
 private[spark] case class RpcEnvConfig(
-    conf: SparkConf,
-    name: String,
-    bindAddress: String,
-    advertiseAddress: String,
-    port: Int,
-    securityManager: SecurityManager,
-    numUsableCores: Int,
-    clientMode: Boolean)
+                                        conf: SparkConf,
+                                        name: String,
+                                        bindAddress: String, // 绑定的 host
+                                        advertiseAddress: String,
+                                        port: Int, // 端口
+                                        securityManager: SecurityManager,
+                                        numUsableCores: Int,
+                                        clientMode: Boolean // 是否是 client
+                                      )

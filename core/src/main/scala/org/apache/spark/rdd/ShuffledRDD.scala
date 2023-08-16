@@ -30,6 +30,7 @@ private[spark] class ShuffledRDDPartition(val idx: Int) extends Partition {
 /**
  * :: DeveloperApi ::
  * The resulting RDD from a shuffle (e.g. repartitioning of data).
+ *
  * @param prev the parent RDD.
  * @param part the partitioner used to partition the RDD
  * @tparam K the key class.
@@ -41,7 +42,7 @@ private[spark] class ShuffledRDDPartition(val idx: Int) extends Partition {
 class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     @transient var prev: RDD[_ <: Product2[K, V]],
     part: Partitioner)
-  extends RDD[(K, C)](prev.context, Nil) {
+    extends RDD[(K, C)](prev.context, Nil) {
 
   private var userSpecifiedSerializer: Option[Serializer] = None
 
@@ -102,8 +103,9 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     val metrics = context.taskMetrics().createTempShuffleReadMetrics()
-    SparkEnv.get.shuffleManager.getReader(
-      dep.shuffleHandle, split.index, split.index + 1, context, metrics)
+    // 读取 Shuffle 数据
+    SparkEnv.get.shuffleManager
+      .getReader(dep.shuffleHandle, split.index, split.index + 1, context, metrics)
       .read()
       .asInstanceOf[Iterator[(K, C)]]
   }

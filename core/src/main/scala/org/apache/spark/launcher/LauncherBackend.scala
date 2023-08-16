@@ -102,6 +102,7 @@ private[spark] abstract class LauncherBackend {
   private class BackendConnection(s: Socket) extends LauncherConnection(s) {
 
     override protected def handle(m: Message): Unit = m match {
+      // 处理 Stop 请求
       case _: Stop =>
         fireStopRequest()
 

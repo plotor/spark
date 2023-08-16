@@ -117,6 +117,8 @@ class AstBuilder extends SqlBaseParserBaseVisitor[AnyRef] with SQLConfHelper wit
    * Create a top-level plan with Common Table Expressions.
    */
   override def visitQuery(ctx: QueryContext): LogicalPlan = withOrigin(ctx) {
+    // 如果存在 QueryOrganizationContext 节点，
+    // 则追加对应的子句（eg. ORDER BY/SORT BY/CLUSTER BY/DISTRIBUTE BY/LIMIT/WINDOWS）
     val query = plan(ctx.queryTerm).optionalMap(ctx.queryOrganization)(withQueryResultClauses)
 
     // Apply CTEs

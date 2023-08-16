@@ -121,11 +121,14 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
     val iter = endpoints.keySet().iterator()
     while (iter.hasNext) {
       val name = iter.next
-        postMessage(name, message, (e) => { e match {
+      postMessage(name, message, (e) => {
+        e match {
           case e: RpcEnvStoppedException => logDebug(s"Message $message dropped. ${e.getMessage}")
           case e: Throwable => logWarning(s"Message $message dropped. ${e.getMessage}")
-        }}
-      )}
+        }
+      }
+      )
+    }
   }
 
   /** Posts a message sent by a remote endpoint. */
@@ -162,14 +165,14 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
   /**
    * Posts a message to a specific endpoint.
    *
-   * @param endpointName name of the endpoint.
-   * @param message the message to post
+   * @param endpointName      name of the endpoint.
+   * @param message           the message to post
    * @param callbackIfStopped callback function if the endpoint is stopped.
    */
   private def postMessage(
-      endpointName: String,
-      message: InboxMessage,
-      callbackIfStopped: (Exception) => Unit): Unit = {
+                           endpointName: String,
+                           message: InboxMessage,
+                           callbackIfStopped: (Exception) => Unit): Unit = {
     val error = synchronized {
       val loop = endpoints.get(endpointName)
       if (stopped) {

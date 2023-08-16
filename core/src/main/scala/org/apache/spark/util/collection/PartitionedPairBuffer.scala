@@ -41,13 +41,16 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
   // and the values, so that we can sort them efficiently with KVArraySortDataFormat.
   private var capacity = initialCapacity
   private var curSize = 0
+  // 保存 Key 和 Value 的数组
   private var data = new Array[AnyRef](2 * initialCapacity)
 
   /** Add an element into the buffer */
   def insert(partition: Int, key: K, value: V): Unit = {
     if (curSize == capacity) {
+      // 扩容
       growArray()
     }
+    // 存入数据
     data(2 * curSize) = (partition, key.asInstanceOf[AnyRef])
     data(2 * curSize + 1) = value.asInstanceOf[AnyRef]
     curSize += 1

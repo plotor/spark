@@ -17,10 +17,10 @@
 
 package org.apache.spark.shuffle
 
-import org.apache.spark.{Partition, ShuffleDependency, SparkEnv, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.MapStatus
+import org.apache.spark.{Partition, ShuffleDependency, SparkEnv, TaskContext}
 
 /**
  * The interface for customizing shuffle write process. The driver create a ShuffleWriteProcessor
@@ -49,14 +49,15 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
       partition: Partition): MapStatus = {
     var writer: ShuffleWriter[Any, Any] = null
     try {
+      // 获取 ShuffleManager 实例，默认为 SortShuffleManager，可以通过 spark.shuffle.manager 参数指定
       val manager = SparkEnv.get.shuffleManager
-      writer = manager.getWriter[Any, Any](
-        dep.shuffleHandle,
-        mapId,
-        context,
-        createMetricsReporter(context))
+      // 依据 shuffleHandle 获取对应的 ShuffleWriter 实例
+      writer = manager
+        .getWriter[Any, Any](dep.shuffleHandle, mapId, context, createMetricsReporter(context))
+      // 对 RDD 进行迭代计算，执行 ShuffleWrite 写 Task 输出
       writer.write(
         rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      // 停止 ShuffleWriter
       val mapStatus = writer.stop(success = true)
       if (mapStatus.isDefined) {
         // Check if sufficient shuffle mergers are available now for the ShuffleMapTask to push
@@ -75,8 +76,9 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         if (!dep.shuffleMergeFinalized) {
           manager.shuffleBlockResolver match {
             case resolver: IndexShuffleBlockResolver =>
-              logInfo(s"Shuffle merge enabled with ${dep.getMergerLocs.size} merger locations " +
-                s" for stage ${context.stageId()} with shuffle ID ${dep.shuffleId}")
+              logInfo(
+                s"Shuffle merge enabled with ${dep.getMergerLocs.size} merger locations " +
+                  s" for stage ${context.stageId()} with shuffle ID ${dep.shuffleId}")
               logDebug(s"Starting pushing blocks for the task ${context.taskAttemptId()}")
               val dataFile = resolver.getDataFile(dep.shuffleId, mapId)
               new ShuffleBlockPusher(SparkEnv.get.conf)

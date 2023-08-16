@@ -83,13 +83,15 @@ import org.apache.spark.util.{HadoopFSUtils, ThreadUtils, Utils}
  * @param bucketSpec An optional specification for bucketing (hash-partitioning) of the data.
  * @param catalogTable Optional catalog table reference that can be used to push down operations
  *                     over the datasource to the catalog service.
+ *
+ * 表示可插拔的数据源
  */
 case class DataSource(
     sparkSession: SparkSession,
     className: String,
     paths: Seq[String] = Nil,
     userSpecifiedSchema: Option[StructType] = None,
-    partitionColumns: Seq[String] = Seq.empty,
+    partitionColumns: Seq[String] = Seq.empty, // 分区字段
     bucketSpec: Option[BucketSpec] = None,
     options: Map[String, String] = Map.empty,
     catalogTable: Option[CatalogTable] = None) extends Logging {
@@ -592,7 +594,7 @@ case class DataSource(
 object DataSource extends Logging {
 
   /** A map to maintain backward compatibility in case we move data sources around. */
-  private val backwardCompatibilityMap: Map[String, String] = {
+  private val backwardCompatibilityMap: Map[String, String] = { //
     val jdbc = classOf[JdbcRelationProvider].getCanonicalName
     val json = classOf[JsonFileFormat].getCanonicalName
     val parquet = classOf[ParquetFileFormat].getCanonicalName
@@ -636,7 +638,11 @@ object DataSource extends Logging {
     "org.apache.spark.sql.sources.HadoopFsRelationProvider",
     "org.apache.spark.Logging")
 
-  /** Given a provider name, look up the data source class definition. */
+  /**
+   * Given a provider name, look up the data source class definition.
+   *
+   * 根据给定的名称查找对应的数据源实现类
+   */
   def lookupDataSource(provider: String, conf: SQLConf): Class[_] = {
     val provider1 = backwardCompatibilityMap.getOrElse(provider, provider) match {
       case name if name.equalsIgnoreCase("orc") &&

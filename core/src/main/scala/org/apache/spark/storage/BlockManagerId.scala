@@ -36,7 +36,7 @@ import org.apache.spark.util.Utils
  */
 @DeveloperApi
 class BlockManagerId private (
-    private var executorId_ : String,
+    private var executorId_ : String, // 如果是 Driver 则为 "driver"
     private var host_ : String,
     private var port_ : Int,
     private var topologyInfo_ : Option[String])
@@ -68,6 +68,7 @@ class BlockManagerId private (
     executorId == SparkContext.DRIVER_IDENTIFIER
   }
 
+  // 序列化后写给外部
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     out.writeUTF(executorId_)
     out.writeUTF(host_)
@@ -77,6 +78,7 @@ class BlockManagerId private (
     topologyInfo.foreach(out.writeUTF(_))
   }
 
+  // 从外部读取并反序列化
   override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
     executorId_ = in.readUTF()
     host_ = in.readUTF()

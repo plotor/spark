@@ -48,7 +48,9 @@ import org.apache.spark.storage.BlockId
  */
 private[spark] class UnifiedMemoryManager(
     conf: SparkConf,
+    // 最大堆内存，默认为系统可用堆内存 * 0.6
     val maxHeapMemory: Long,
+    // 默认为 maxHeapMemory * 0.5
     onHeapStorageRegionSize: Long,
     numCores: Int)
   extends MemoryManager(
@@ -81,6 +83,8 @@ private[spark] class UnifiedMemoryManager(
    * task has a chance to ramp up to at least 1 / 2N of the total memory pool (where N is the # of
    * active tasks) before it is forced to spill. This can happen if the number of tasks increase
    * but an older task had a lot of memory already.
+   *
+   * 为指定 Task 申请 numBytes 内存
    */
   override private[memory] def acquireExecutionMemory(
       numBytes: Long,
@@ -230,6 +234,7 @@ object UnifiedMemoryManager {
       }
     }
     val usableMemory = systemMemory - reservedMemory
+    // spark.memory.fraction，默认 0.6
     val memoryFraction = conf.get(config.MEMORY_FRACTION)
     (usableMemory * memoryFraction).toLong
   }

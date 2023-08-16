@@ -17,21 +17,24 @@
 
 package org.apache.spark.network.server;
 
-import java.nio.ByteBuffer;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.spark.network.client.MergedBlockMetaResponseCallback;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.StreamCallbackWithID;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.protocol.MergedBlockMetaRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
 
 /**
  * Handler for sendRPC() messages sent by {@link org.apache.spark.network.client.TransportClient}s.
  */
 public abstract class RpcHandler {
+
+  /**
+   * RPC 请求处理器抽象
+   */
 
   private static final RpcResponseCallback ONE_WAY_CALLBACK = new OneWayRpcCallback();
   private static final MergedBlockMetaReqHandler NOOP_MERGED_BLOCK_META_REQ_HANDLER =

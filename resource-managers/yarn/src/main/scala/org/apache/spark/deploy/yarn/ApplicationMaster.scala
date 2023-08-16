@@ -474,6 +474,7 @@ private[spark] class ApplicationMaster(
       dummyRunner.launchContextDebugInfo()
     }
 
+    // 创建 YarnAllocator 对象
     allocator = client.createAllocator(
       yarnConf,
       _sparkConf,
@@ -488,6 +489,7 @@ private[spark] class ApplicationMaster(
     // the allocator is ready to service requests.
     rpcEnv.setupEndpoint("YarnAM", new AMEndpoint(rpcEnv, driverRef))
 
+    // 向 YARN 申请 Container，并在上面启动 Executor
     allocator.allocateResources()
     val ms = MetricsSystem.createMetricsSystem(MetricsSystemInstances.APPLICATION_MASTER, sparkConf)
     val prefix = _sparkConf.get(YARN_METRICS_NAMESPACE).getOrElse(appId)
@@ -500,6 +502,7 @@ private[spark] class ApplicationMaster(
 
   private def runDriver(): Unit = {
     addAmIpFilter(None, System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV))
+    // 另起一个线程运行用户程序
     userClassThread = startUserApplication()
 
     // This a bit hacky, but we need to wait until the spark.driver.port property has
@@ -507,6 +510,8 @@ private[spark] class ApplicationMaster(
     logInfo("Waiting for spark context initialization...")
     val totalWaitTime = sparkConf.get(AM_MAX_WAIT_TIME)
     try {
+      // 超时等待 SparkContext 初始化完成
+      // SparkContext 在初始完成之后会回调 YarnClusterScheduler#postStartHook 方法通知
       val sc = ThreadUtils.awaitResult(sparkContextPromise.future,
         Duration(totalWaitTime, TimeUnit.MILLISECONDS))
       if (sc != null) {
@@ -515,11 +520,13 @@ private[spark] class ApplicationMaster(
         val userConf = sc.getConf
         val host = userConf.get(DRIVER_HOST_ADDRESS)
         val port = userConf.get(DRIVER_PORT)
+        // 向 RM 注册 AM
         registerAM(host, port, userConf, sc.ui.map(_.webUrl), appAttemptId)
 
         val driverRef = rpcEnv.setupEndpointRef(
           RpcAddress(host, port),
           YarnSchedulerBackend.ENDPOINT_NAME)
+        // 向 YARN 申请创建 Container，并在上面启动 Executor 进程
         createAllocator(driverRef, userConf, rpcEnv, appAttemptId, distCacheConf)
       } else {
         // Sanity check; should never happen in normal operation, since sc should only be null
@@ -527,6 +534,7 @@ private[spark] class ApplicationMaster(
         throw new IllegalStateException("User did not initialize spark context!")
       }
       resumeDriver()
+      // 等待用户程序线程运行完成
       userClassThread.join()
     } catch {
       case e: SparkException if e.getCause().isInstanceOf[TimeoutException] =>
@@ -875,6 +883,7 @@ object ApplicationMaster extends Logging {
 
   def main(args: Array[String]): Unit = {
     SignalUtils.registerLogger(log)
+    // 解析和封装命令行参数
     val amArgs = new ApplicationMasterArguments(args)
     val sparkConf = new SparkConf()
     if (amArgs.propertiesFile != null) {
@@ -892,6 +901,7 @@ object ApplicationMaster extends Logging {
     }
 
     val yarnConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(sparkConf))
+    // 创建 ApplicationMaster 对象
     master = new ApplicationMaster(amArgs, sparkConf, yarnConf)
 
     val ugi = sparkConf.get(PRINCIPAL) match {
@@ -923,6 +933,7 @@ object ApplicationMaster extends Logging {
     }
 
     ugi.doAs(new PrivilegedExceptionAction[Unit]() {
+      // 执行 ApplicationMaster#run 方法
       override def run(): Unit = System.exit(master.run())
     })
   }

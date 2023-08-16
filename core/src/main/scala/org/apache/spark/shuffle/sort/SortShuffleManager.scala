@@ -96,6 +96,11 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       shuffleId: Int,
       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     if (SortShuffleWriter.shouldBypassMergeSort(conf, dependency)) {
+      /*
+       * 条件：
+       * 1. 不需要预聚合
+       * 2. 分区数量不超过 200（可以通过 spark.shuffle.sort.bypassMergeThreshold 参数设置）
+       */
       // If there are fewer than spark.shuffle.sort.bypassMergeThreshold partitions and we don't
       // need map-side aggregation, then write numPartitions files directly and just concatenate
       // them at the end. This avoids doing serialization and deserialization twice to merge
@@ -104,6 +109,12 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       new BypassMergeSortShuffleHandle[K, V](
         shuffleId, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
     } else if (SortShuffleManager.canUseSerializedShuffle(dependency)) {
+      /*
+       * 条件：
+       * 1. 不需要预聚合
+       * 2. 分区数量不超过 16777215
+       * 3. ShuffleDependency 关联的 serializer 支持重定位其序列化对象
+       */
       // Otherwise, try to buffer map outputs in a serialized form, since this is more efficient:
       new SerializedShuffleHandle[K, V](
         shuffleId, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
@@ -230,6 +241,7 @@ private[spark] object SortShuffleManager extends Logging {
   def canUseSerializedShuffle(dependency: ShuffleDependency[_, _, _]): Boolean = {
     val shufId = dependency.shuffleId
     val numPartitions = dependency.partitioner.numPartitions
+    // 对于 KryoSerializer 在启用 auto-reset 的情况下支持
     if (!dependency.serializer.supportsRelocationOfSerializedObjects) {
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
         s"${dependency.serializer.getClass.getName}, does not support object relocation")

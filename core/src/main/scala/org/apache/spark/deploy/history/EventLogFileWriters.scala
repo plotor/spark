@@ -212,14 +212,17 @@ class SingleEventLogFileWriter(
     hadoopConf: Configuration)
   extends EventLogFileWriter(appId, appAttemptId, logBaseDir, sparkConf, hadoopConf) {
 
+  // ${spark.eventLog.dir}/${appAttemptId | appId}[.codec]
   override val logPath: String = SingleEventLogFileWriter.getLogPath(logBaseDir, appId,
     appAttemptId, compressionCodecName)
 
   protected def inProgressPath = logPath + EventLogFileWriter.IN_PROGRESS
 
   override def start(): Unit = {
+    // 校验日志路径是否是目录
     requireLogBaseDirAsDirectory()
 
+    // 创建指向日志路径的 PrintWriter
     initLogFile(new Path(inProgressPath)) { os =>
       new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8))
     }

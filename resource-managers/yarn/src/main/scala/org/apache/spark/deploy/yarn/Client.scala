@@ -72,6 +72,7 @@ private[spark] class Client(
 
   import Client._
 
+  // 创建 YARN Client，用于和 YARN ResourceManager 通信
   private val yarnClient = YarnClient.createYarnClient
   private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(sparkConf))
 
@@ -114,9 +115,9 @@ private[spark] class Client(
   // Executor offHeap memory in MiB.
   protected val executorOffHeapMemory = Utils.executorOffHeapMemorySizeAsMb(sparkConf)
 
-  private val executorMemoryOvereadFactor = sparkConf.get(EXECUTOR_MEMORY_OVERHEAD_FACTOR)
+  private val executorMemoryOverheadFactor = sparkConf.get(EXECUTOR_MEMORY_OVERHEAD_FACTOR)
   private val executorMemoryOverhead = sparkConf.get(EXECUTOR_MEMORY_OVERHEAD).getOrElse(
-    math.max((executorMemoryOvereadFactor * executorMemory).toLong,
+    math.max((executorMemoryOverheadFactor * executorMemory).toLong,
       ResourceProfile.MEMORY_OVERHEAD_MIN_MIB)).toInt
 
   private val isPython = sparkConf.get(IS_PYTHON_APP)
@@ -188,6 +189,7 @@ private[spark] class Client(
 
     try {
       launcherBackend.connect()
+      // 初始化并启动 YARN Client
       yarnClient.init(hadoopConf)
       yarnClient.start()
 
@@ -197,8 +199,10 @@ private[spark] class Client(
       }
 
       // Get a new application from our RM
+      // 请求 RM 创建 application
       val newApp = yarnClient.createApplication()
       val newAppResponse = newApp.getNewApplicationResponse()
+      // 拿到本次 application 对应的 id
       this.appId = newAppResponse.getApplicationId()
 
       // The app staging dir based on the STAGING_DIR configuration if configured
@@ -217,10 +221,13 @@ private[spark] class Client(
       verifyClusterResources(newAppResponse)
 
       // Set up the appropriate contexts to launch our AM
+      // 为当前 application 对应的 ApplicationMaster 创建启动和提交上下文，
+      // 期间会决策 AM 的实现，以及 AM 如何启动执行用户程序
       val containerContext = createContainerLaunchContext()
       val appContext = createApplicationSubmissionContext(newApp, containerContext)
 
       // Finally, submit and monitor the application
+      // 提交并监控 application 的运行状态
       logInfo(s"Submitting application $appId to ResourceManager")
       yarnClient.submitApplication(appContext)
       launcherBackend.setAppId(appId.toString)
@@ -978,6 +985,7 @@ private[spark] class Client(
         Nil
       }
 
+    // 设置启动环境
     val launchEnv = setupLaunchEnv(stagingDirPath, pySparkArchives)
     val localResources = prepareLocalResources(stagingDirPath, pySparkArchives)
 
@@ -1062,6 +1070,7 @@ private[spark] class Client(
     // For log4j2 configuration to reference
     javaOpts += ("-Dspark.yarn.app.container.log.dir=" + ApplicationConstants.LOG_DIR_EXPANSION_VAR)
 
+    // 解析用户程序驱动类
     val userClass =
       if (isClusterMode) {
         Seq("--class", YarnSparkHadoopUtil.escapeForShell(args.userClass))
@@ -1086,6 +1095,7 @@ private[spark] class Client(
       } else {
         Nil
       }
+    // 解析 AM 实现类
     val amClass =
       if (isClusterMode) {
         Utils.classForName("org.apache.spark.deploy.yarn.ApplicationMaster").getName
@@ -1107,6 +1117,7 @@ private[spark] class Client(
         buildPath(Environment.PWD.$$(), LOCALIZED_CONF_DIR, DIST_CACHE_CONF_FILE))
 
     // Command for the ApplicationMaster
+    // 构建启动 AM 的 java 命令
     val commands = prefixEnv ++
       Seq(Environment.JAVA_HOME.$$() + "/bin/java", "-server") ++
       javaOpts ++ amArgs ++
@@ -1761,6 +1772,11 @@ private[spark] class YarnClusterApplication extends SparkApplication {
     conf.remove(FILES)
     conf.remove(ARCHIVES)
 
+    /*
+     * 1. 封装命令行参数为 ClientArguments 对象
+     * 2. 创建 Client 对象，核心在于创建 YARN 客户端，用于和 RM 进行通信
+     * 3. 执行 run 方法，将 application 提交给 YARN 执行
+     */
     new Client(new ClientArguments(args), conf, null).run()
   }
 

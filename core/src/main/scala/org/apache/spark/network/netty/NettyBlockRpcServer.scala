@@ -44,6 +44,7 @@ class NettyBlockRpcServer(
     blockManager: BlockDataManager)
   extends RpcHandler with Logging {
 
+  // 提供一对一的流服务
   private val streamManager = new OneForOneStreamManager()
 
   override def receive(
@@ -70,6 +71,7 @@ class NettyBlockRpcServer(
     logTrace(s"Received request: $message")
 
     message match {
+      // 打开若干 Block
       case openBlocks: OpenBlocks =>
         val blocksNum = openBlocks.blockIds.length
         val blocks = (0 until blocksNum).map { i =>
@@ -114,6 +116,7 @@ class NettyBlockRpcServer(
         responseContext.onSuccess(
           new StreamHandle(streamId, numBlockIds).toByteBuffer)
 
+      // 上传 Block
       case uploadBlock: UploadBlock =>
         // StorageLevel and ClassTag are serialized as bytes using our JavaSerializer.
         val (level, classTag) = deserializeMetadata(uploadBlock.metadata)

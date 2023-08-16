@@ -23,7 +23,7 @@ import java.util.Properties
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.rdd.RDD
 
 /**
@@ -32,28 +32,29 @@ import org.apache.spark.rdd.RDD
  *
  * See [[org.apache.spark.scheduler.Task]] for more information.
  *
- * @param stageId id of the stage this task belongs to
- * @param stageAttemptId attempt id of the stage this task belongs to
- * @param taskBinary broadcast version of the RDD and the ShuffleDependency. Once deserialized,
- *                   the type should be (RDD[_], ShuffleDependency[_, _, _]).
- * @param partition partition of the RDD this task is associated with
- * @param locs preferred task execution locations for locality scheduling
- * @param localProperties copy of thread-local properties set by the user on the driver side.
+ * @param stageId               id of the stage this task belongs to
+ * @param stageAttemptId        attempt id of the stage this task belongs to
+ * @param taskBinary            broadcast version of the RDD and the ShuffleDependency. Once deserialized,
+ *                              the type should be (RDD[_], ShuffleDependency[_, _, _]).
+ * @param partition             partition of the RDD this task is associated with
+ * @param locs                  preferred task execution locations for locality scheduling
+ * @param localProperties       copy of thread-local properties set by the user on the driver side.
  * @param serializedTaskMetrics a `TaskMetrics` that is created and serialized on the driver side
  *                              and sent to executor side.
  *
- * The parameters below are optional:
- * @param jobId id of the job this task belongs to
- * @param appId id of the app this task belongs to
- * @param appAttemptId attempt id of the app this task belongs to
- * @param isBarrier whether this task belongs to a barrier stage. Spark must launch all the tasks
- *                  at the same time for a barrier stage.
+ *                              The parameters below are optional:
+ * @param jobId                 id of the job this task belongs to
+ * @param appId                 id of the app this task belongs to
+ * @param appAttemptId          attempt id of the app this task belongs to
+ * @param isBarrier             whether this task belongs to a barrier stage. Spark must launch all the tasks
+ *                              at the same time for a barrier stage.
  */
 private[spark] class ShuffleMapTask(
     stageId: Int,
     stageAttemptId: Int,
     taskBinary: Broadcast[Array[Byte]],
     partition: Partition,
+    // Task 位置偏好信息
     @transient private var locs: Seq[TaskLocation],
     localProperties: Properties,
     serializedTaskMetrics: Array[Byte],
@@ -61,13 +62,23 @@ private[spark] class ShuffleMapTask(
     appId: Option[String] = None,
     appAttemptId: Option[String] = None,
     isBarrier: Boolean = false)
-  extends Task[MapStatus](stageId, stageAttemptId, partition.index, localProperties,
-    serializedTaskMetrics, jobId, appId, appAttemptId, isBarrier)
-  with Logging {
+    extends Task[MapStatus](
+      stageId,
+      stageAttemptId,
+      partition.index,
+      localProperties,
+      serializedTaskMetrics,
+      jobId,
+      appId,
+      appAttemptId,
+      isBarrier)
+    with Logging {
 
   /** A constructor used only in test suites. This does not require passing in an RDD. */
   def this(partitionId: Int) = {
-    this(0, 0, null, new Partition { override def index: Int = 0 }, null, new Properties, null)
+    this(0, 0, null, new Partition {
+      override def index: Int = 0
+    }, null, new Properties, null)
   }
 
   @transient private val preferredLocs: Seq[TaskLocation] = {
@@ -82,8 +93,11 @@ private[spark] class ShuffleMapTask(
       threadMXBean.getCurrentThreadCpuTime
     } else 0L
     val ser = SparkEnv.get.closureSerializer.newInstance()
+    // 对 Task 进行反序列化
     val rddAndDep = ser.deserialize[(RDD[_], ShuffleDependency[_, _, _])](
-      ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
+      ByteBuffer.wrap(taskBinary.value),
+      Thread.currentThread.getContextClassLoader)
+
     _executorDeserializeTimeNs = System.nanoTime() - deserializeStartTimeNs
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
@@ -96,6 +110,8 @@ private[spark] class ShuffleMapTask(
     val mapId = if (SparkEnv.get.conf.get(config.SHUFFLE_USE_OLD_FETCH_PROTOCOL)) {
       partitionId
     } else context.taskAttemptId()
+    // 执行 ShuffleWrite，期间会对 RDD 指定分区数据进行计算
+    logInfo(s"Shuffle write for rdd ${rdd.id}, mapId: $mapId, ${partition.index}")
     dep.shuffleWriterProcessor.write(rdd, dep, mapId, context, partition)
   }
 

@@ -17,23 +17,22 @@
 
 package org.apache.spark.memory;
 
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.spark.unsafe.memory.MemoryBlock;
+import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
-import com.google.common.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.spark.unsafe.memory.MemoryBlock;
-import org.apache.spark.util.Utils;
 
 /**
  * Manages the memory allocated by an individual task.
@@ -55,6 +54,9 @@ import org.apache.spark.util.Utils;
  * This allows us to address 8192 pages. In on-heap mode, the maximum page size is limited by the
  * maximum size of a long[] array, allowing us to address 8192 * (2^31 - 1) * 8 bytes, which is
  * approximately 140 terabytes of memory.
+ *
+ * 用于管理单个 Task 的内存分配与释放，每个 Task 尝试对应一个 TaskMemoryManager，多个 TaskMemoryManager
+ * 共享一个 MemoryManager，每个TaskMemoryManager管理的任务内存又会有多个内存消费者（MemoryConsumer）进行消费
  */
 public class TaskMemoryManager {
 
@@ -144,6 +146,7 @@ public class TaskMemoryManager {
     // off-heap memory. This is subject to change, though, so it may be risky to make this
     // optimization now in case we forget to undo it late when making changes.
     synchronized (this) {
+      // 尝试申请 required 大小内存空间
       long got = memoryManager.acquireExecutionMemory(required, taskAttemptId, mode);
 
       // Try to release memory from other consumers first, then we can reduce the frequency of
@@ -218,6 +221,7 @@ public class TaskMemoryManager {
     logger.debug("Task {} try to spill {} from {} for {}", taskAttemptId,
       Utils.bytesToString(requested), consumerToSpill, requestingConsumer);
     try {
+      // 执行 spill 以腾出内存空间
       long released = consumerToSpill.spill(requested, requestingConsumer);
       if (released > 0) {
         logger.debug("Task {} spilled {} of requested {} from {} for {}", taskAttemptId,
@@ -294,6 +298,8 @@ public class TaskMemoryManager {
    * Returns `null` if there was not enough memory to allocate the page. May return a page that
    * contains fewer bytes than requested, so callers should verify the size of returned pages.
    *
+   * 分配指定大小的 MemoryBlock
+   *
    * @throws TooLargePageException
    */
   public MemoryBlock allocatePage(long size, MemoryConsumer consumer) {
@@ -342,6 +348,8 @@ public class TaskMemoryManager {
 
   /**
    * Free a block of memory allocated via {@link TaskMemoryManager#allocatePage}.
+   *
+   * 释放 MemoryConsumer 分配的 MemoryBlock
    */
   public void freePage(MemoryBlock page, MemoryConsumer consumer) {
     assert (page.pageNumber != MemoryBlock.NO_PAGE_NUMBER) :
@@ -387,6 +395,9 @@ public class TaskMemoryManager {
     return encodePageNumberAndOffset(page.pageNumber, offsetInPage);
   }
 
+  /**
+   * 给定页号和偏移量，返回相对于内存块其实地址的偏移量
+   */
   @VisibleForTesting
   public static long encodePageNumberAndOffset(int pageNumber, long offsetInPage) {
     assert (pageNumber >= 0) : "encodePageNumberAndOffset called with invalid page";
@@ -404,6 +415,7 @@ public class TaskMemoryManager {
 
   /**
    * Get the page associated with an address encoded by
+   * 通过地址获取内存对象
    * {@link TaskMemoryManager#encodePageNumberAndOffset(MemoryBlock, long)}
    */
   public Object getPage(long pagePlusOffsetAddress) {

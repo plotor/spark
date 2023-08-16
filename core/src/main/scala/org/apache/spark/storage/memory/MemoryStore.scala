@@ -41,10 +41,11 @@ import org.apache.spark.util.{SizeEstimator, Utils}
 import org.apache.spark.util.collection.SizeTrackingVector
 import org.apache.spark.util.io.{ChunkedByteBuffer, ChunkedByteBufferOutputStream}
 
+// Block 在内存中以 MemoryEntry 的形式存在
 private sealed trait MemoryEntry[T] {
-  def size: Long
+  def size: Long // 当前 Block 大小
   def memoryMode: MemoryMode
-  def classTag: ClassTag[T]
+  def classTag: ClassTag[T] // 当前 Block 类型
 }
 private case class DeserializedMemoryEntry[T](
     value: Array[T],
@@ -59,6 +60,7 @@ private case class SerializedMemoryEntry[T](
   def size: Long = buffer.size
 }
 
+// Block 驱逐处理器，用于将 Block 从内存中驱逐（通常而言是溢写磁盘）
 private[storage] trait BlockEvictionHandler {
   /**
    * Drop a block from memory, possibly putting it on disk if applicable. Called when the memory
@@ -91,16 +93,20 @@ private[spark] class MemoryStore(
   // Note: all changes to memory allocations, notably putting blocks, evicting blocks, and
   // acquiring or releasing unroll memory, must be synchronized on `memoryManager`!
 
+  // 记录 BlockId 与对应 Block 的映射关系（MemoryEntry 格式）
   private val entries = new LinkedHashMap[BlockId, MemoryEntry[_]](32, 0.75f, true)
 
   // A mapping from taskAttemptId to amount of memory used for unrolling a block (in bytes)
   // All accesses of this map are assumed to have manually synchronized on `memoryManager`
+  // 任务 TaskAttemptId 与展开 block 所使用的堆内存大小的映射
   private val onHeapUnrollMemoryMap = mutable.HashMap[Long, Long]()
   // Note: off-heap unroll memory is only used in putIteratorAsBytes() because off-heap caching
   // always stores serialized values.
+  // 任务 TaskAttemptId 与展开 block 所使用的堆外内存大小的映射
   private val offHeapUnrollMemoryMap = mutable.HashMap[Long, Long]()
 
   // Initial memory to request before unrolling any block
+  // 展开 Block 前的初始内存大小，默认为 1M
   private val unrollMemoryThreshold: Long =
     conf.get(STORAGE_UNROLL_MEMORY_THRESHOLD)
 
@@ -142,16 +148,18 @@ private[spark] class MemoryStore(
    *
    * @return true if the put() succeeded, false otherwise.
    */
-  def putBytes[T: ClassTag](
+  def putBytes[T: ClassTag]( // 将指定 Block 写入内存
       blockId: BlockId,
       size: Long,
       memoryMode: MemoryMode,
       _bytes: () => ChunkedByteBuffer): Boolean = {
     require(!contains(blockId), s"Block $blockId is already present in the MemoryStore")
+    // 检查内存能否容纳，如果内存不足则尝试申请
     if (memoryManager.acquireStorageMemory(blockId, size, memoryMode)) {
       // We acquired enough memory for the block, so go ahead and put it
       val bytes = _bytes()
       assert(bytes.size == size)
+      // 将 Block 封装成 MemoryEntry 写入 entries
       val entry = new SerializedMemoryEntry[T](bytes, memoryMode, implicitly[ClassTag[T]])
       entries.synchronized {
         entries.put(blockId, entry)
@@ -187,6 +195,12 @@ private[spark] class MemoryStore(
    */
   private def putIterator[T](
       blockId: BlockId,
+      /*
+       * 将 BlockId 对应的 Block（已经转换为 Iterator）写入内存。
+       * 有时候放入内存的Block很大，所以一次性将此对象写入内存可能将引发OOM异常。
+       * 为了避免这种情况的发生，首先需要将Block转换为Iterator，然后渐进式地展开此Iterator，
+       * 并且周期性地检查是否有足够的展开内存。
+       */
       values: Iterator[T],
       classTag: ClassTag[T],
       memoryMode: MemoryMode,
@@ -566,6 +580,7 @@ private[spark] class MemoryStore(
       memory: Long,
       memoryMode: MemoryMode): Boolean = {
     memoryManager.synchronized {
+      // 尝试申请内容以容纳 memory 字节大小
       val success = memoryManager.acquireUnrollMemory(blockId, memory, memoryMode)
       if (success) {
         val taskAttemptId = currentTaskAttemptId()
@@ -573,6 +588,7 @@ private[spark] class MemoryStore(
           case MemoryMode.ON_HEAP => onHeapUnrollMemoryMap
           case MemoryMode.OFF_HEAP => offHeapUnrollMemoryMap
         }
+        // 更新对应属性
         unrollMemoryMap(taskAttemptId) = unrollMemoryMap.getOrElse(taskAttemptId, 0L) + memory
       }
       success
@@ -591,7 +607,9 @@ private[spark] class MemoryStore(
         case MemoryMode.OFF_HEAP => offHeapUnrollMemoryMap
       }
       if (unrollMemoryMap.contains(taskAttemptId)) {
+        // 计算要释放的内存大小
         val memoryToRelease = math.min(memory, unrollMemoryMap(taskAttemptId))
+        // 释放内存
         if (memoryToRelease > 0) {
           unrollMemoryMap(taskAttemptId) -= memoryToRelease
           memoryManager.releaseUnrollMemory(memoryToRelease, memoryMode)

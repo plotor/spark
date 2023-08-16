@@ -83,9 +83,14 @@ import org.apache.spark.util.logging.DriverLogger
  */
 class SparkContext(config: SparkConf) extends Logging {
 
+  /*
+   * 保存线程栈中最靠近栈顶的用户定义的类及最靠近栈底的 Scala 或者 Spark 核心类信息，
+   * 其中 shortForm 属性保存着以上信息的简短描述，longForm 属性则保存着以上信息的完整描述。
+   */
   // The call site where this SparkContext was constructed.
   private val creationSite: CallSite = Utils.getCallSite()
 
+  // 校验是否允许在 Executor 上创建 SparkContext 对象
   if (!config.get(EXECUTOR_ALLOW_SPARK_CONTEXT)) {
     // In order to prevent SparkContext from being created in executors.
     SparkContext.assertOnDriver()
@@ -339,6 +344,7 @@ class SparkContext(config: SparkConf) extends Logging {
    * )
    */
   def applicationId: String = _applicationId
+  // 当前应用尝试执行的标识，Spark Driver 在执行时会多次尝试执行，每次尝试都将生成一个标识来代表应用尝试执行的身份
   def applicationAttemptId: Option[String] = _applicationAttemptId
 
   private[spark] def eventLogger: Option[EventLoggingListener] = _eventLogger
@@ -434,6 +440,7 @@ class SparkContext(config: SparkConf) extends Logging {
       .toSeq.flatten
     _archives = _conf.getOption(ARCHIVES.key).map(Utils.stringToSeq).toSeq.flatten
 
+    // 对应 spark.eventLog.dir 配置，默认为 /tmp/spark-events
     _eventLogDir =
       if (isEventLogEnabled) {
         val unresolvedDir = conf.get(EVENT_LOG_DIR).stripSuffix("/")
@@ -607,6 +614,7 @@ class SparkContext(config: SparkConf) extends Logging {
       System.setProperty("spark.ui.proxyBase", proxyUrl)
     }
     _ui.foreach(_.setAppId(_applicationId))
+    // 初始化 BlockManager
     _env.blockManager.initialize(_applicationId)
     FallbackStorage.registerBlockManagerIfNeeded(_env.blockManager.master, _conf)
 
@@ -615,6 +623,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _env.metricsSystem.start(_conf.get(METRICS_STATIC_SOURCES_ENABLED))
 
     _eventLogger =
+      // spark.eventLog.enabled
       if (isEventLogEnabled) {
         val logger =
           new EventLoggingListener(_applicationId, _applicationAttemptId, _eventLogDir.get,
@@ -627,6 +636,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
 
     _cleaner =
+      // spark.cleaner.referenceTracking，默认为 true
       if (_conf.get(CLEANER_REFERENCE_TRACKING)) {
         Some(new ContextCleaner(this, _shuffleDriverComponents))
       } else {
@@ -636,8 +646,10 @@ class SparkContext(config: SparkConf) extends Logging {
 
     val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(_conf)
     _executorAllocationManager =
+      // 启用了 Dynamic Allocation（对应 spark.dynamicAllocation.enabled 配置项）
       if (dynamicAllocationEnabled) {
         schedulerBackend match {
+          // on YARN, Kubernetes, Standalone 模式
           case b: ExecutorAllocationClient =>
             Some(new ExecutorAllocationManager(
               schedulerBackend.asInstanceOf[ExecutorAllocationClient], listenerBus, _conf,
@@ -674,7 +686,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     }
 
-    // Post init
+    // Post init，通知 SparkContext 已完成初始化
     _taskScheduler.postStartHook()
     if (isLocal) {
       _env.metricsSystem.registerSource(Executor.executorSourceLocalModeOnly)
@@ -2235,8 +2247,10 @@ class SparkContext(config: SparkConf) extends Logging {
     if (conf.getBoolean("spark.logLineage", false)) {
       logInfo("RDD's recursive dependencies:\n" + rdd.toDebugString)
     }
+    // 将 DAG 和 RDD 提交给 DAGScheduler 进行调度
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
+    // 保存检查点
     rdd.doCheckpoint()
   }
 
@@ -2950,6 +2964,7 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      // standalone
       case SPARK_REGEX(sparkUrl) =>
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
@@ -2986,14 +3001,19 @@ object SparkContext extends Logging {
         }
         (backend, scheduler)
 
+      // on YARN or Kubernetes
       case masterUrl =>
+        // 基于 SPI 获取对应的 ExternalClusterManager 实现
         val cm = getClusterManager(masterUrl) match {
           case Some(clusterMgr) => clusterMgr
           case None => throw new SparkException("Could not parse Master URL: '" + master + "'")
         }
         try {
+          // 创建 TaskScheduler
           val scheduler = cm.createTaskScheduler(sc, masterUrl)
+          // 创建 SchedulerBackend
           val backend = cm.createSchedulerBackend(sc, masterUrl, scheduler)
+          // 初始化 ClusterManager
           cm.initialize(scheduler, backend)
           (backend, scheduler)
         } catch {
@@ -3004,6 +3024,9 @@ object SparkContext extends Logging {
     }
   }
 
+  /**
+   * 基于 SPI 机制获取对应的 ExternalClusterManager 实现
+   */
   private def getClusterManager(url: String): Option[ExternalClusterManager] = {
     val loader = Utils.getContextOrSparkClassLoader
     val serviceLoaders =

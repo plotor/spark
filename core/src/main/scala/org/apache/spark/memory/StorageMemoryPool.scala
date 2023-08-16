@@ -41,12 +41,13 @@ private[memory] class StorageMemoryPool(
   }
 
   @GuardedBy("lock")
-  private[this] var _memoryUsed: Long = 0L
+  private[this] var _memoryUsed: Long = 0L // 已使用的内存大小，单位：字节
 
   override def memoryUsed: Long = lock.synchronized {
     _memoryUsed
   }
 
+  // 用于在内存中存储 Block
   private var _memoryStore: MemoryStore = _
   def memoryStore: MemoryStore = {
     if (_memoryStore == null) {
@@ -69,6 +70,7 @@ private[memory] class StorageMemoryPool(
    * @return whether all N bytes were successfully granted.
    */
   def acquireMemory(blockId: BlockId, numBytes: Long): Boolean = lock.synchronized {
+    // 计算需要腾出的内存空间大小
     val numBytesToFree = math.max(0, numBytes - memoryFree)
     acquireMemory(blockId, numBytes, numBytesToFree)
   }
@@ -83,17 +85,21 @@ private[memory] class StorageMemoryPool(
    */
   def acquireMemory(
       blockId: BlockId,
+      // 需要的总内存空间大小
       numBytesToAcquire: Long,
+      // 需要腾出的内存空间大小
       numBytesToFree: Long): Boolean = lock.synchronized {
     assert(numBytesToAcquire >= 0)
     assert(numBytesToFree >= 0)
     assert(memoryUsed <= poolSize)
     if (numBytesToFree > 0) {
+      // 将一部分内存中的 Block 溢写，以腾出指定空间大小的内存
       memoryStore.evictBlocksToFreeSpace(Some(blockId), numBytesToFree, memoryMode)
     }
     // NOTE: If the memory store evicts blocks, then those evictions will synchronously call
     // back into this StorageMemoryPool in order to free memory. Therefore, these variables
     // should have been updated.
+    // 计算内存空间是否充足
     val enoughMemory = numBytesToAcquire <= memoryFree
     if (enoughMemory) {
       _memoryUsed += numBytesToAcquire

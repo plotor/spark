@@ -39,8 +39,10 @@ import org.apache.spark.util.random.XORShiftRandom
  */
 object SortBenchmark extends BenchmarkBase {
 
-  private def referenceKeyPrefixSort(buf: LongArray, lo: Int, hi: Int,
-      refCmp: PrefixComparator): Unit = {
+  private def referenceKeyPrefixSort(buf: LongArray,
+                                     lo: Int,
+                                     hi: Int,
+                                     refCmp: PrefixComparator): Unit = {
     val sortBuffer = new LongArray(MemoryBlock.fromLongArray(new Array[Long](buf.size().toInt)))
     new Sorter(new UnsafeSortDataFormat(sortBuffer)).sort(buf, lo, hi,
       (r1: RecordPointerAndKeyPrefix, r2: RecordPointerAndKeyPrefix) =>
@@ -59,14 +61,14 @@ object SortBenchmark extends BenchmarkBase {
     val rand = new XORShiftRandom(123)
     val benchmark = new Benchmark("radix sort " + size, size, output = output)
     benchmark.addTimerCase("reference TimSort key prefix array") { timer =>
-      val array = Array.tabulate[Long](size * 2) { i => rand.nextLong }
+      val array = Array.tabulate[Long](size * 2) { _ => rand.nextLong }
       val buf = new LongArray(MemoryBlock.fromLongArray(array))
       timer.startTiming()
       referenceKeyPrefixSort(buf, 0, size, PrefixComparators.BINARY)
       timer.stopTiming()
     }
     benchmark.addTimerCase("reference Arrays.sort") { timer =>
-      val ref = Array.tabulate[Long](size) { i => rand.nextLong }
+      val ref = Array.tabulate[Long](size) { _ => rand.nextLong }
       timer.startTiming()
       Arrays.sort(ref)
       timer.stopTiming()

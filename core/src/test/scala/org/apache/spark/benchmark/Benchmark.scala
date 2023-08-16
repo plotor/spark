@@ -31,31 +31,33 @@ import org.apache.spark.util.Utils
 
 /**
  * Utility class to benchmark components. An example of how to use this is:
- *  val benchmark = new Benchmark("My Benchmark", valuesPerIteration)
- *   benchmark.addCase("V1")(<function>)
- *   benchmark.addCase("V2")(<function>)
- *   benchmark.run
+ * val benchmark = new Benchmark("My Benchmark", valuesPerIteration)
+ * benchmark.addCase("V1")(<function>)
+ * benchmark.addCase("V2")(<function>)
+ * benchmark.run
  * This will output the average time to run each function and the rate of each function.
  *
  * The benchmark function takes one argument that is the iteration that's being run.
  *
- * @param name name of this benchmark.
+ * @param name               name of this benchmark.
  * @param valuesPerIteration number of values used in the test case, used to compute rows/s.
- * @param minNumIters the min number of iterations that will be run per case, not counting warm-up.
- * @param warmupTime amount of time to spend running dummy case iterations for JIT warm-up.
- * @param minTime further iterations will be run for each case until this time is used up.
+ * @param minNumIters        the min number of iterations that will be run per case, not counting warm-up.
+ * @param warmupTime         amount of time to spend running dummy case iterations for JIT warm-up.
+ * @param minTime            further iterations will be run for each case until this time is used up.
  * @param outputPerIteration if true, the timing for each run will be printed to stdout.
- * @param output optional output stream to write benchmark results to
+ * @param output             optional output stream to write benchmark results to
  */
 private[spark] class Benchmark(
-    name: String,
-    valuesPerIteration: Long,
-    minNumIters: Int = 2,
-    warmupTime: FiniteDuration = 2.seconds,
-    minTime: FiniteDuration = 2.seconds,
-    outputPerIteration: Boolean = false,
-    output: Option[OutputStream] = None) {
+                                name: String,
+                                valuesPerIteration: Long,
+                                minNumIters: Int = 2,
+                                warmupTime: FiniteDuration = 2.seconds,
+                                minTime: FiniteDuration = 2.seconds,
+                                outputPerIteration: Boolean = false,
+                                output: Option[OutputStream] = None) {
+
   import Benchmark._
+
   val benchmarks = mutable.ArrayBuffer.empty[Benchmark.Case]
 
   val out = if (output.isDefined) {
@@ -68,7 +70,7 @@ private[spark] class Benchmark(
    * Adds a case to run when run() is called. The given function will be run for several
    * iterations to collect timing statistics.
    *
-   * @param name of the benchmark case
+   * @param name     of the benchmark case
    * @param numIters if non-zero, forces exactly this many iterations to be run
    */
   def addCase(name: String, numIters: Int = 0)(f: Int => Unit): Unit = {
@@ -84,11 +86,15 @@ private[spark] class Benchmark(
    * until timer.startTiming() is called within the given function. The corresponding
    * timer.stopTiming() method must be called before the function returns.
    *
-   * @param name of the benchmark case
+   * @param name     of the benchmark case
    * @param numIters if non-zero, forces exactly this many iterations to be run
    */
   def addTimerCase(name: String, numIters: Int = 0)(f: Benchmark.Timer => Unit): Unit = {
     benchmarks += Benchmark.Case(name, f, numIters)
+  }
+
+  def run(): Unit = {
+    runWithReqult()
   }
 
   /**
@@ -96,7 +102,7 @@ private[spark] class Benchmark(
    * a comment with the benchmark. Although the results vary from machine to machine, it should
    * provide some baseline.
    */
-  def run(): Unit = {
+  def runWithReqult(): Seq[NamedResult] = {
     require(benchmarks.nonEmpty)
     // scalastyle:off
     println("Running benchmark: " + name)
@@ -115,6 +121,7 @@ private[spark] class Benchmark(
     out.printf(s"%-${nameLen}s %14s %14s %11s %12s %13s %10s\n",
       name + ":", "Best Time(ms)", "Avg Time(ms)", "Stdev(ms)", "Rate(M/s)", "Per Row(ns)", "Relative")
     out.println("-" * (nameLen + 80))
+
     results.zip(benchmarks).foreach { case (result, benchmark) =>
       out.printf(s"%-${nameLen}s %14s %14s %11s %12s %13s %10s\n",
         benchmark.name,
@@ -127,6 +134,10 @@ private[spark] class Benchmark(
     }
     out.println
     // scalastyle:on
+
+    results.zip(benchmarks)
+      .map { case (result, benchmark) => NamedResult(benchmark.name, result.avgMs, result.bestRate, result.bestMs, result.stdevMs) }
+      .toSeq
   }
 
   /**
@@ -134,7 +145,7 @@ private[spark] class Benchmark(
    * the rate of the function.
    */
   def measure(num: Long, overrideNumIters: Int)(f: Timer => Unit): Result = {
-    System.gc()  // ensures garbage from previous cases don't impact this one
+    System.gc() // ensures garbage from previous cases don't impact this one
     val warmupDeadline = warmupTime.fromNow
     while (!warmupDeadline.isOverdue) {
       f(new Benchmark.Timer(-1))
@@ -144,6 +155,8 @@ private[spark] class Benchmark(
     val runTimes = ArrayBuffer[Long]()
     var totalTime = 0L
     var i = 0
+    println(s"  Start to measure, min iteration is $minIters, " +
+      s"and min duration is ${NANOSECONDS.toMillis(minDuration)} ms")
     while (i < minIters || totalTime < minDuration) {
       val timer = new Benchmark.Timer(i)
       f(timer)
@@ -159,7 +172,7 @@ private[spark] class Benchmark(
       i += 1
     }
     // scalastyle:off
-    println(s"  Stopped after $i iterations, ${NANOSECONDS.toMillis(runTimes.sum)} ms")
+    println(s"  Stopped after $i iterations, elapse is ${NANOSECONDS.toMillis(runTimes.sum)} ms")
     // scalastyle:on
     assert(runTimes.nonEmpty)
     val best = runTimes.min
@@ -200,7 +213,10 @@ private[spark] object Benchmark {
   }
 
   case class Case(name: String, fn: Timer => Unit, numIters: Int)
+
   case class Result(avgMs: Double, bestRate: Double, bestMs: Double, stdevMs: Double)
+
+  case class NamedResult(name: String, avgMs: Double, bestRate: Double, bestMs: Double, stdevMs: Double)
 
   /**
    * This should return a user helpful processor information. Getting at this depends on the OS.
